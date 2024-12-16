@@ -21,6 +21,10 @@ from .cert_handler import CustomSSLContext
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 
 
+class ApiError(Exception):
+    pass
+
+
 class DucoClient:
     @classmethod
     async def create(
@@ -66,7 +70,8 @@ class DucoClient:
             key_pair = await self.create_api_key()
             api_key = str(key_pair["api_key"])
             self._headers.update({"Api-Key": api_key})
-            self._key = key_pair
+            self._api_key = key_pair["api_key"]
+            self._api_timestamp = key_pair["timestamp"]
 
         _LOGGER.debug(f"Private API endpoint: {self._base_url}")
 
@@ -100,8 +105,11 @@ class DucoClient:
         _LOGGER.debug(f"API key created at {time.ctime(key["timestamp"])}")
         return key
 
-    def get_key(self):
-        return self._key
+    def get_api_key(self):
+        return self._api_key
+
+    def get_api_timestamp(self):
+        return self._api_timestamp
 
     async def get(self, endpoint: str) -> dict[str, Any]:
         data = await get_with_retries(
@@ -163,7 +171,7 @@ class DucoClient:
             from_dict(NodeDataDTO, remove_val_fields(node_dict))
             for node_dict in nodes_val_dict["Nodes"]
         ]
-        return from_dict(NodesDataDTO, nodes)  # type: ignore
+        return NodesDataDTO(**{"Nodes": nodes})  # type: ignore
 
     async def get_node_info(self, node_id: int) -> NodeDataDTO:
         _LOGGER.debug("Getting node info")
