@@ -54,7 +54,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await register_device(dto_device, entry, hass_device_registry)
 
     async def async_update_data() -> DeviceDTO:
-        """Fetch Eplucon data from API endpoint."""
+        """Fetch Duco data from API endpoint."""
         _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")  # type: ignore
 
         try:

@@ -17,10 +17,10 @@ _LOGGER = logging.getLogger(__name__)
 DATA_SCHEMA = vol.Schema(
     {
         vol.Required("api_endpoint", default=API_PRIVATE_URL): str,
-        vol.Optional("box_irbd"): str,
-        vol.Optional("box_index"): str,
-        vol.Optional("box_serial_number"): str,
-        vol.Optional("box_service_number"): str,
+        vol.Optional("box_irbd", default=""): str,
+        vol.Optional("box_index", default=""): str,
+        vol.Optional("box_serial_number", default=""): str,
+        vol.Optional("box_service_number", default=""): str,
     }
 )
 
