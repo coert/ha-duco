@@ -8,6 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import DeviceRegistry
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.helpers import device_registry
 
 from duco.api.DTO.DeviceDTO import DeviceDTO
 from duco.api.DTO.InfoDTO import BoardDTO
@@ -36,7 +37,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     dto_device = DeviceDTO(
         id=duco_board.ProductIdBox,
-        account_module_index=duco_client.get_api_key(),
+        account_module_index=str(duco_client.get_api_key()),
         name=duco_board.BoxName.capitalize(),
         type=" ".join(
             [word.capitalize() for word in duco_board.BoxSubTypeName.split("_")]
@@ -45,8 +46,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         box_index=box_index,
         box_serial_number=box_serial_number,
         box_service_number=box_service_number,
+        nodes=[],
         board=duco_board,
     )
+
+    hass_device_registry = device_registry.async_get(hass)
+    await register_device(dto_device, entry, hass_device_registry)
 
     async def async_update_data() -> DeviceDTO:
         """Fetch Eplucon data from API endpoint."""
@@ -54,15 +59,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         try:
             calls = (duco_client.get_info(), duco_client.get_nodes())
-            data = await asyncio.gather(*calls)
-
-            info = data[0]
-            nodes = data[1]
+            info, nodes = await asyncio.gather(*calls)
 
             dto_device.lan = info.General.Lan
             dto_device.ventilation = info.Ventilation
 
-            dto_device.nodes = []
             for node in nodes.Nodes:
                 dto_device.nodes.append(node)
 

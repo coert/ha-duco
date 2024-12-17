@@ -162,3 +162,4 @@ cython_debug/
 #.idea/
 custom_components/duco/test.py
 custom_components/main.py
+custom_components/duco.tar.bz2

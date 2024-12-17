@@ -8,10 +8,11 @@ from typing import Any
 import aiohttp
 from aiohttp import TCPConnector
 
-from ...api import certs
+from ...api import certs  # type: ignore
 from ...api.DTO.ApiDTO import ApiDetailsDTO
 from ...api.DTO.InfoDTO import InfoDTO
 from ...api.DTO.NodeInfoDTO import NodeDataDTO, NodesDataDTO
+from ...api.DTO.InfoDTO import GeneralDTO
 from ...api.utils import from_dict, remove_val_fields
 from ...const import API_LOCAL_IP, API_PRIVATE_URL
 from ..call_handler import get_with_retries
@@ -67,7 +68,8 @@ class DucoClient:
             }
 
         else:
-            key_pair = await self.create_api_key()
+            info = await self.get_info()
+            key_pair = await self.create_api_key(info.General)
             api_key = str(key_pair["api_key"])
             self._headers.update({"Api-Key": api_key})
             self._api_key = key_pair["api_key"]
@@ -86,13 +88,12 @@ class DucoClient:
         except Exception as e:
             _LOGGER.error(f"Error while closing session: {e}")
 
-    async def create_api_key(self) -> dict[str, str | float]:
+    async def create_api_key(self, info_general: GeneralDTO) -> dict[str, str | float]:
         _LOGGER.debug("Creating API key")
 
-        info = await self.get_info()
-        duco_mac = info.General.Lan.Mac
-        duco_serial = info.General.Board.SerialBoardBox
-        duco_time = info.General.Board.Time
+        duco_mac = info_general.Lan.Mac
+        duco_serial = info_general.Board.SerialBoardBox
+        duco_time = info_general.Board.Time
 
         api_key_generator = ApiKeyGenerator()
         key = {

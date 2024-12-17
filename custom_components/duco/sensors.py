@@ -100,6 +100,7 @@ async def async_setup_entry(
 class DucoSensorEntity(CoordinatorEntity, SensorEntity):
     """Representation of an Duco sensor."""
 
+    device: DeviceDTO
     entity_description: DucoSensorEntityDescription
 
     def __init__(
@@ -127,7 +128,7 @@ class DucoSensorEntity(CoordinatorEntity, SensorEntity):
     def _update_device_data(self):
         """Update the internal data from the coordinator."""
         # Assuming devices are updated in the coordinator data
-        for updated_device in self.coordinator.data:
+        for updated_device in self.coordinator.data.values():
             if isinstance(updated_device, dict):
                 updated_device = from_dict(data_class=DeviceDTO, data=updated_device)
             if updated_device.id == self.device.id:

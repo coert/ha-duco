@@ -48,12 +48,11 @@ class DucoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             client = await DucoClient.create(private_url=api_endpoint)
 
-        try:
-            data = await client.get_info()
+            try:
+                info = await client.get_info()
 
-            if data:
-                duco_board = data.General.Board
-                duco_lan = data.General.Lan
+                duco_board = info.General.Board
+                duco_lan = info.General.Lan
 
                 return self.async_create_entry(
                     title=MANUFACTURER,
@@ -67,21 +66,18 @@ class DucoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     },
                 )
 
-            else:
-                errors["base"] = "no-devices"
+            except ApiError:
+                # Handle general API error
+                _LOGGER.info("Failed to fetch devices from Duco API")
+                errors["base"] = "api"
 
-        except ApiError:
-            # Handle general API error
-            _LOGGER.info("Failed to fetch devices from Duco API")
-            errors["base"] = "api"
+            except Exception as e:
+                # Handle any other unexpected exceptions
+                _LOGGER.exception("Unexpected exception: %s", e)
+                errors["base"] = "unknown"
 
-        except Exception as e:
-            # Handle any other unexpected exceptions
-            _LOGGER.exception("Unexpected exception: %s", e)
-            errors["base"] = "unknown"
-
-        finally:
-            await client.close()
+            finally:
+                await client.close()
 
         # If the user input is not valid or an error occurred, show the form again with the error message
         return self.async_show_form(
@@ -123,26 +119,22 @@ class DucoOptionsFlowHandler(config_entries.OptionsFlow):
             client = await DucoClient.create(private_url=api_endpoint)
 
             try:
-                data = await client.get_info()
+                info = await client.get_info()
 
-                if data:
-                    duco_board = data.General.Board
-                    duco_lan = data.General.Lan
+                duco_board = info.General.Board
+                duco_lan = info.General.Lan
 
-                    return self.async_create_entry(
-                        title=MANUFACTURER,
-                        data={
-                            "duco_board": duco_board,
-                            "duco_lan": duco_lan,
-                            "box_irbd": box_irbd,
-                            "box_index": box_index,
-                            "box_serial_number": box_serial_number,
-                            "box_service_number": box_service_number,
-                        },
-                    )
-
-                else:
-                    errors["base"] = "no-devices"
+                return self.async_create_entry(
+                    title=MANUFACTURER,
+                    data={
+                        "duco_board": duco_board,
+                        "duco_lan": duco_lan,
+                        "box_irbd": box_irbd,
+                        "box_index": box_index,
+                        "box_serial_number": box_serial_number,
+                        "box_service_number": box_service_number,
+                    },
+                )
 
             except ApiError:
                 # Handle general API error
