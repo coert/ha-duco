@@ -1,0 +1,21 @@
+{
+  "domain": "duco",
+  "name": "Duco",
+  "codeowners": [
+    "@coert"
+  ],
+  "config_flow": true,
+  "dependencies": [
+    "sensor"
+  ],
+  "documentation": "https://github.com/coert/ha-duco",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/coert/ha-duco/issues",
+  "requirements": [
+    "aiohttp",
+    "dacite",
+    "orjson"
+  ],
+  "single_config_entry": true,
+  "version": "1.0.0"
+}

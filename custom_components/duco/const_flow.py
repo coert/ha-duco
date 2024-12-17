@@ -17,10 +17,10 @@ _LOGGER = logging.getLogger(__name__)
 DATA_SCHEMA = vol.Schema(
     {
         vol.Required("api_endpoint", default=API_PRIVATE_URL): str,
-        vol.Required("box_IRBd"): str,
-        vol.Required("box_Index"): str,
-        vol.Required("box_Serial_number"): str,
-        vol.Required("box_Service_number"): str,
+        vol.Optional("box_irbd"): str,
+        vol.Optional("box_index"): str,
+        vol.Optional("box_serial_number"): str,
+        vol.Optional("box_service_number"): str,
     }
 )
 
@@ -41,10 +41,20 @@ class DucoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             # Attempt to connect to the API using the provided API token & endpoint
             api_endpoint: str = user_input["api_endpoint"]
-            box_irbd: str = user_input["box_IRBd"]
-            box_index: str = user_input["box_Index"]
-            box_serial_number: str = user_input["box_Serial_number"]
-            box_service_number: str = user_input["box_Service_number"]
+            box_irbd: str = user_input["box_irbd"] if "box_irbd" in user_input else ""
+            box_index: str = (
+                user_input["box_index"] if "box_index" in user_input else ""
+            )
+            box_serial_number: str = (
+                user_input["box_serial_number"]
+                if "box_serial_number" in user_input
+                else ""
+            )
+            box_service_number: str = (
+                user_input["box_service_number"]
+                if "box_service_number" in user_input
+                else ""
+            )
 
             client = await DucoClient.create(private_url=api_endpoint)
 
@@ -111,11 +121,20 @@ class DucoOptionsFlowHandler(config_entries.OptionsFlow):
 
         if user_input is not None:
             api_endpoint = user_input.get("api_endpoint")
-            box_irbd = user_input.get("box_irbd")
-            box_index = user_input.get("box_index")
-            box_serial_number = user_input.get("box_serial_number")
-            box_service_number = user_input.get("box_service_number")
-
+            box_irbd: str = user_input["box_irbd"] if "box_irbd" in user_input else ""
+            box_index: str = (
+                user_input["box_index"] if "box_index" in user_input else ""
+            )
+            box_serial_number: str = (
+                user_input["box_serial_number"]
+                if "box_serial_number" in user_input
+                else ""
+            )
+            box_service_number: str = (
+                user_input["box_service_number"]
+                if "box_service_number" in user_input
+                else ""
+            )
             client = await DucoClient.create(private_url=api_endpoint)
 
             try:

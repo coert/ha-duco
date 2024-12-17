@@ -1,0 +1,60 @@
+{
+  "title": "Duco",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Duco",
+        "description": "Please enter the local IP address as the API Endpoint to access your Duco connectivity board, as well as Duco Box properties (optional).",
+        "data_description": {
+          "box_IRBd": "The IRBd number",
+          "box_Index": "The index number",
+          "box_Serial_number": "The serial number",
+          "box_Service_number": "The service number"
+        },
+        "data": {
+          "api_endpoint": "API Endpoint",
+          "box_IRBd": "IRBd",
+          "box_Index": "Index",
+          "box_Serial_number": "Serial number",
+          "box_Service_number": "Service number"
+        }
+      }
+    },
+    "error": {
+      "auth": "Authentication failed. Please check your API token and/or API endpoint.",
+      "api": "Failed to connect to the Duco API. Please check the API endpoint and try again or check the logs for more info.",
+      "unknown": "An unexpected error occurred. Please try again or check the logs for more info.",
+      "no-devices": "No devices found."
+    },
+    "abort": {
+      "single_instance_allowed": "Only a single instance of Duco is allowed."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Duco Config options",
+        "description": "Current API endpoint",
+        "data_description": {
+          "box_IRBd": "The IRBd number",
+          "box_Index": "The index number",
+          "box_Serial_number": "The serial number",
+          "box_Service_number": "The service number"
+        },
+        "data": {
+          "api_endpoint": "API Endpoint",
+          "box_IRBd": "IRBd",
+          "box_Index": "Index",
+          "box_Serial_number": "Serial number",
+          "box_Service_number": "Service number"
+        }
+      }
+    },
+    "error": {
+      "auth": "Authentication failed. Please check your API token and/or API endpoint.",
+      "api": "Failed to connect to the Duco API. Please check the API endpoint and try again or check the logs for more info.",
+      "unknown": "An unexpected error occurred. Please try again or check the logs for more info.",
+      "no-devices": "No devices found."
+    }
+  }
+}
