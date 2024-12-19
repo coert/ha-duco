@@ -10,7 +10,7 @@ from homeassistant.core import callback
 from .api.private.duco_client import ApiError, DucoClient
 from .const import API_PRIVATE_URL, DOMAIN, MANUFACTURER
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = logging.getLogger(__package__)
 
 
 # Define the schema for the user input (API token)
@@ -56,10 +56,10 @@ class DucoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 else ""
             )
 
-            client = await DucoClient.create(private_url=api_endpoint)
+            duco_client = await DucoClient.create(self.hass, private_url=api_endpoint)
 
             try:
-                info = await client.get_info()
+                info = await duco_client.get_info()
 
                 duco_board = info.General.Board
                 duco_lan = info.General.Lan
@@ -87,7 +87,7 @@ class DucoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "unknown"
 
             finally:
-                await client.close()
+                await duco_client.close()
 
         # If the user input is not valid or an error occurred, show the form again with the error message
         return self.async_show_form(
@@ -102,15 +102,15 @@ class DucoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         config_entry: config_entries.ConfigEntry,
     ) -> config_entries.OptionsFlow:
         """Get the options flow for this handler."""
-        return DucoOptionsFlowHandler(config_entry)
+        return DucoOptionsFlowHandler(config_entry.entry_id)
 
 
 class DucoOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle Duco options."""
 
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+    def __init__(self, config_entry_id: str) -> None:
         """Initialize Duco options flow."""
-        self.config_entry = config_entry
+        self._config_entry_id = config_entry_id
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -119,7 +119,12 @@ class DucoOptionsFlowHandler(config_entries.OptionsFlow):
         """Manage the options for the integration."""
         errors: dict[str, str] = {}
 
+        config_entry = self.hass.config_entries.async_get_entry(self._config_entry_id)
+
         if user_input is not None:
+            self.hass.config_entries.async_update_entry(
+                config_entry, options=user_input
+            )
             api_endpoint = user_input.get("api_endpoint")
             box_irbd: str = user_input["box_irbd"] if "box_irbd" in user_input else ""
             box_index: str = (
@@ -135,11 +140,11 @@ class DucoOptionsFlowHandler(config_entries.OptionsFlow):
                 if "box_service_number" in user_input
                 else ""
             )
-            client = await DucoClient.create(private_url=api_endpoint)
+
+            client = await DucoClient.create(self.hass, private_url=api_endpoint)
 
             try:
                 info = await client.get_info()
-
                 duco_board = info.General.Board
                 duco_lan = info.General.Lan
 

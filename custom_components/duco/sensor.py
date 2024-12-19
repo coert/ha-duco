@@ -27,7 +27,7 @@ from homeassistant.helpers.update_coordinator import (
 from .api.DTO.DeviceDTO import DeviceDTO
 from .const import DOMAIN, MANUFACTURER
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = logging.getLogger(__package__)
 
 
 @dataclass(kw_only=True)
@@ -41,7 +41,7 @@ class DucoSensorEntityDescription(SensorEntityDescription):
 
 
 # Define the sensor types
-SENSORS_WTW: tuple[DucoSensorEntityDescription, ...] = (
+SENSORS_DUCOBOX: tuple[DucoSensorEntityDescription, ...] = (
     DucoSensorEntityDescription(
         key="fan_speed_sup",
         name="Fan Speed Supply",
@@ -68,31 +68,18 @@ async def async_setup_entry(
     # Ensure the coordinator has refreshed its data
     await coordinator.async_config_entry_first_refresh()
 
-    devices = coordinator.data
+    list_device_dto_duco: list[DeviceDTO] = []
+    if isinstance(coordinator.data, dict):
+        device: DeviceDTO = from_dict(data_class=DeviceDTO, data=coordinator.data)
+    else:
+        device = coordinator.data
 
-    list_device_dto_heat_pump: list[DeviceDTO] = []
-    list_device_dto_zones_controllers: list[DeviceDTO] = []
-
-    for device in devices:
-        if isinstance(device, dict):
-            device = from_dict(data_class=DeviceDTO, data=device)
-        assert isinstance(device, DeviceDTO), f"Expected DeviceDTO, got {type(device)}"
-        if device.type == "heat_pump":
-            list_device_dto_heat_pump.append(device)
-        elif device.type == "zones_controller":
-            list_device_dto_zones_controllers.append(device)
+    list_device_dto_duco.append(device)
 
     async_add_entities(
         DucoSensorEntity(coordinator, device, description)
-        for device in list_device_dto_heat_pump
-        for description in SENSORS_WTW
-        if description.exists_fn(device)
-    )
-
-    async_add_entities(
-        DucoSensorEntity(coordinator, device, description)
-        for device in list_device_dto_heat_pump
-        for description in SENSORS_ZONES
+        for device in list_device_dto_duco
+        for description in SENSORS_DUCOBOX
         if description.exists_fn(device)
     )
 
@@ -111,6 +98,7 @@ class DucoSensorEntity(CoordinatorEntity, SensorEntity):
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
+
         self.device = device
         self.entity_description = entity_description
         self._attr_name = f"{entity_description.name}"
@@ -128,11 +116,11 @@ class DucoSensorEntity(CoordinatorEntity, SensorEntity):
     def _update_device_data(self):
         """Update the internal data from the coordinator."""
         # Assuming devices are updated in the coordinator data
-        for updated_device in self.coordinator.data.values():
-            if isinstance(updated_device, dict):
-                updated_device = from_dict(data_class=DeviceDTO, data=updated_device)
-            if updated_device.id == self.device.id:
-                self.device = updated_device
+        updated_device = self.coordinator.data
+        if isinstance(updated_device, dict):
+            updated_device = from_dict(data_class=DeviceDTO, data=updated_device)  # type: ignore
+        if updated_device.id == self.device.id:
+            self.device = updated_device
 
     @property
     def native_value(self) -> StateType:

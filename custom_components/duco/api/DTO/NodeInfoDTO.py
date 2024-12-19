@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Optional
 
 
 @dataclass
@@ -15,17 +16,17 @@ class GeneralDTO:
     UpTime: int
     Identify: int
     LinkMode: int
-    ProductId: int | None = None
-    SerialDuco: str | None = None
-    Name: str | None = None
+    ProductId: Optional[int]
+    SerialDuco: Optional[str]
+    Name: Optional[str]
 
 
 @dataclass
 class NetworkDucoDTO:
     CommErrorCtr: int
-    RssiRfN2M: int | None = None
-    HopRf: int | None = None
-    RssiRfN2H: int | None = None
+    RssiRfN2M: Optional[int]
+    HopRf: Optional[int]
+    RssiRfN2H: Optional[int]
 
 
 @dataclass
@@ -35,21 +36,21 @@ class VentilationDTO:
     TimeStateEnd: int
     FlowLvlOvrl: int
     FlowLvlReqSensor: int
-    Mode: str | None = None
-    FlowLvlTgt: int | None = None
-    Pos: int | None = None
+    Mode: Optional[str]
+    FlowLvlTgt: Optional[int]
+    Pos: Optional[int]
 
 
 @dataclass
 class SensorDTO:
-    Temp: float | None = None
-    Co2: int | None = None
-    IaqCo2: int | None = None
+    Temp: Optional[float]
+    Co2: Optional[int]
+    IaqCo2: Optional[int]
 
 
 @dataclass
 class DiagDTO:
-    Errors: list
+    Errors: list[str]
 
 
 @dataclass
@@ -59,7 +60,7 @@ class NodeDataDTO:
     NetworkDuco: NetworkDucoDTO
     Ventilation: VentilationDTO
     Diag: DiagDTO
-    Sensor: SensorDTO | None = None
+    Sensor: Optional[SensorDTO]
 
 
 @dataclass

@@ -44,3 +44,13 @@ def from_dict(data_class, data_dict):
             field_values[field_name] = field_value
 
     return data_class(**field_values)  # type: ignore
+
+
+def safe_get(data, *keys):
+    """Safely get nested keys from a dict."""
+    for key in keys:
+        if isinstance(data, dict):
+            data = data.get(key)
+        else:
+            return None
+    return data

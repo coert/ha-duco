@@ -1,104 +1,105 @@
 from dataclasses import dataclass
+from typing import Optional
 
 
 @dataclass
 class BoardDTO:
-    ApiVersion: str
-    ApiAccessSecurityLvl: int
-    PublicApiVersion: str
-    SwVersionComm: str
-    SwVersionCommBoot: str
-    SwVersionBox: str
-    SwVersionBoxBoot: str
-    BoxName: str
-    BoxSubType: int
-    CommSubType: int
-    BoxSubTypeName: str
-    CommSubTypeName: str
-    ProductIdBox: int
-    ProductIdComm: int
-    SerialBoardBox: str
-    SerialBoardComm: str
-    SerialDucoBox: str
-    SerialDucoComm: str
-    UpTime: int
-    Time: int
+    ApiVersion: Optional[str]
+    ApiAccessSecurityLvl: Optional[int]
+    PublicApiVersion: Optional[str]
+    SwVersionComm: Optional[str]
+    SwVersionCommBoot: Optional[str]
+    SwVersionBox: Optional[str]
+    SwVersionBoxBoot: Optional[str]
+    BoxName: Optional[str]
+    BoxSubType: Optional[int]
+    CommSubType: Optional[int]
+    BoxSubTypeName: Optional[str]
+    CommSubTypeName: Optional[str]
+    ProductIdBox: Optional[int]
+    ProductIdComm: Optional[int]
+    SerialBoardBox: Optional[str]
+    SerialBoardComm: Optional[str]
+    SerialDucoBox: Optional[str]
+    SerialDucoComm: Optional[str]
+    UpTime: Optional[int]
+    Time: Optional[int]
 
 
 @dataclass
 class LanDTO:
-    Mode: str
-    Ip: str
-    NetMask: str
-    DefaultGateway: str
-    Dns: str
-    Mac: str
-    HostName: str
-    DucoClientIp: str
-    WifiClientSsid: str
-    RssiWifi: int
-    ScanWifi: list
+    Mode: Optional[str]
+    Ip: Optional[str]
+    NetMask: Optional[str]
+    DefaultGateway: Optional[str]
+    Dns: Optional[str]
+    Mac: Optional[str]
+    HostName: Optional[str]
+    DucoClientIp: Optional[str]
+    WifiClientSsid: Optional[str]
+    RssiWifi: Optional[int]
+    ScanWifi: Optional[list]
 
 
 @dataclass
 class NetworkDucoDTO:
-    HomeId: str
-    State: str
+    HomeId: Optional[str]
+    State: Optional[str]
 
 
 @dataclass
 class GeneralDTO:
     Board: BoardDTO
     Lan: LanDTO
-    NetworkDuco: NetworkDucoDTO
+    NetworkDuco: Optional[NetworkDucoDTO]
 
 
 @dataclass
 class SubSystemDTO:
-    Component: str
-    Status: str
+    Component: Optional[str]
+    Status: Optional[str]
 
 
 @dataclass
 class DiagDTO:
-    Errors: list
-    SubSystems: list[SubSystemDTO]
+    Errors: Optional[list[str]]
+    SubSystems: Optional[list[SubSystemDTO]]
 
 
 @dataclass
 class SensorDTO:
-    TempOda: int
-    TempSup: int
-    TempEta: int
-    TempEha: int
+    TempOda: Optional[int]
+    TempSup: Optional[int]
+    TempEta: Optional[int]
+    TempEha: Optional[int]
 
 
 @dataclass
 class FanDTO:
-    SpeedSup: int
-    PressSupTgt: int
-    PressSup: int
-    PwmLvlSup: int
-    PwmSup: int
-    SpeedEha: int
-    PressEha: int
-    PressEhaTgt: int
-    PwmEha: int
-    PwmLvlEha: int
+    SpeedSup: Optional[int]
+    PressSupTgt: Optional[int]
+    PressSup: Optional[int]
+    PwmLvlSup: Optional[int]
+    PwmSup: Optional[int]
+    SpeedEha: Optional[int]
+    PressEha: Optional[int]
+    PressEhaTgt: Optional[int]
+    PwmEha: Optional[int]
+    PwmLvlEha: Optional[int]
 
 
 @dataclass
 class CalibrationDTO:
-    Valid: bool
-    State: str
-    Status: str
-    Error: int
-    ResistSupZone1: int
-    ResistEha: int
-    PressSupCfgZone1: int
-    PressEha: int
-    PressEhaCfg: int
-    FlowEhaCfg: int
+    Valid: Optional[bool]
+    State: Optional[str]
+    Status: Optional[str]
+    Error: Optional[int]
+    ResistSupZone1: Optional[int]
+    ResistEha: Optional[int]
+    PressSupCfgZone1: Optional[int]
+    PressEha: Optional[int]
+    PressEhaCfg: Optional[int]
+    FlowEhaCfg: Optional[int]
 
 
 @dataclass
@@ -110,38 +111,38 @@ class VentilationDTO:
 
 @dataclass
 class HeatRecoveryGeneralDTO:
-    TimeFilterRemain: int
+    TimeFilterRemain: Optional[int]
 
 
 @dataclass
 class BypassDTO:
-    Pos: int
-    TempSupTgt: int
+    Pos: Optional[int]
+    TempSupTgt: Optional[int]
 
 
 @dataclass
 class ProtectFrostDTO:
-    State: int
-    PressReduct: int
-    HeaterOdaPresent: bool
+    State: Optional[int]
+    PressReduct: Optional[int]
+    HeaterOdaPresent: Optional[bool]
 
 
 @dataclass
 class HeatRecoveryDTO:
     General: HeatRecoveryGeneralDTO
-    Bypass: BypassDTO
-    ProtectFrost: ProtectFrostDTO
+    Bypass: Optional[BypassDTO]
+    ProtectFrost: Optional[ProtectFrostDTO]
 
 
 @dataclass
 class NightBoostGeneralDTO:
-    TempOutsideAvgThs: int
-    TempOutsideAvg: int
-    TempOutside: int
-    TempComfort: int
-    TimeCond: bool
-    TempZone1: int
-    FlowLvlReqZone1: int
+    TempOutsideAvgThs: Optional[int]
+    TempOutsideAvg: Optional[int]
+    TempOutside: Optional[int]
+    TempComfort: Optional[int]
+    TimeCond: Optional[bool]
+    TempZone1: Optional[int]
+    FlowLvlReqZone1: Optional[int]
 
 
 @dataclass
@@ -151,15 +152,15 @@ class NightBoostDTO:
 
 @dataclass
 class VentCoolGeneralDTO:
-    State: int
-    TempOutsideAvgThs: int
-    TempOutsideAvg: int
-    TempInside: int
-    TempInsideMin: int
-    TempInsideMax: int
-    TempComfort: int
-    TempOutside: int
-    Co2Cond: bool
+    State: Optional[int]
+    TempOutsideAvgThs: Optional[int]
+    TempOutsideAvg: Optional[int]
+    TempInside: Optional[int]
+    TempInsideMin: Optional[int]
+    TempInsideMax: Optional[int]
+    TempComfort: Optional[int]
+    TempOutside: Optional[int]
+    Co2Cond: Optional[bool]
 
 
 @dataclass
@@ -169,12 +170,12 @@ class VentCoolDTO:
 
 @dataclass
 class WeatherStationDTO:
-    Type: int
+    Type: Optional[int]
 
 
 @dataclass
 class WeatherStationDiagDTO:
-    Enable: bool
+    Enable: Optional[bool]
 
 
 @dataclass
@@ -185,10 +186,10 @@ class WeatherHandlerDTO:
 
 @dataclass
 class AzureConnectionDTO:
-    State: int
-    Id: int
-    HostName: str
-    DeviceId: str
+    State: Optional[int]
+    Id: Optional[int]
+    HostName: Optional[str]
+    DeviceId: Optional[str]
 
 
 @dataclass
@@ -199,10 +200,10 @@ class AzureDTO:
 @dataclass
 class InfoDTO:
     General: GeneralDTO
-    Diag: DiagDTO | None = None
-    HeatRecovery: HeatRecoveryDTO | None = None
-    Ventilation: VentilationDTO | None = None
-    NightBoost: NightBoostDTO | None = None
-    VentCool: VentCoolDTO | None = None
-    WeatherHandler: WeatherHandlerDTO | None = None
-    Azure: AzureDTO | None = None
+    Diag: Optional[DiagDTO]
+    HeatRecovery: Optional[HeatRecoveryDTO]
+    Ventilation: Optional[VentilationDTO]
+    NightBoost: Optional[NightBoostDTO]
+    VentCool: Optional[VentCoolDTO]
+    WeatherHandler: Optional[WeatherHandlerDTO]
+    Azure: Optional[AzureDTO]

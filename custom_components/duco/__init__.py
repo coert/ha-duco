@@ -3,19 +3,19 @@ import inspect
 import logging
 from datetime import timedelta
 
+from dacite import from_dict
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers import device_registry
 from homeassistant.helpers.device_registry import DeviceRegistry
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
-from homeassistant.helpers import device_registry
 
-from duco.api.DTO.DeviceDTO import DeviceDTO
-from duco.api.DTO.InfoDTO import BoardDTO
-from duco.api.private.duco_client import ApiError, DucoClient
-from duco.const import API_PRIVATE_URL, DOMAIN, MANUFACTURER, PLATFORMS
+from .api.DTO.DeviceDTO import DeviceDTO
+from .api.DTO.InfoDTO import BoardDTO
+from .api.private.duco_client import ApiError, DucoClient
+from .const import API_PRIVATE_URL, DOMAIN, MANUFACTURER, PLATFORMS
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = logging.getLogger(__package__)
 
 # Time between data updates
 UPDATE_INTERVAL = timedelta(seconds=30)
@@ -26,10 +26,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")  # type: ignore
 
     private_url = entry.data.get("api_endpoint", API_PRIVATE_URL)
-    session = async_get_clientsession(hass)
-    duco_client = await DucoClient.create(session=session, private_url=private_url)
+    duco_client = await DucoClient.create(hass, private_url=private_url)
 
-    duco_board: BoardDTO = entry.data["duco_board"]
+    duco_board: BoardDTO = from_dict(BoardDTO, data=dict(entry.data["duco_board"]))
     box_irbd: str = entry.data["box_irbd"]
     box_index: int = entry.data["box_index"]
     box_serial_number: str = entry.data["box_serial_number"]
@@ -48,6 +47,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         box_service_number=box_service_number,
         nodes=[],
         board=duco_board,
+        lan=None,
+        ventilation=None,
     )
 
     hass_device_registry = device_registry.async_get(hass)

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Optional
 
 from .InfoDTO import BoardDTO, LanDTO, VentilationDTO
 from .NodeInfoDTO import NodeDataDTO
@@ -15,6 +16,6 @@ class DeviceDTO:
     box_serial_number: str
     box_service_number: str
     nodes: list[NodeDataDTO]
-    board: BoardDTO | None = None
-    lan: LanDTO | None = None
-    ventilation: VentilationDTO | None = None
+    board: Optional[BoardDTO]
+    lan: Optional[LanDTO]
+    ventilation: Optional[VentilationDTO]

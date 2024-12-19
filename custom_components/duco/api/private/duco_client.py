@@ -1,19 +1,22 @@
 from __future__ import annotations
 
 import importlib.resources as pkg_resources
+import inspect
 import logging
+import ssl
 import time
+from pathlib import Path
 from typing import Any
 
 import aiohttp
-from aiohttp import TCPConnector
+from dacite import from_dict
+from homeassistant.core import HomeAssistant
 
 from ...api import certs  # type: ignore
 from ...api.DTO.ApiDTO import ApiDetailsDTO
-from ...api.DTO.InfoDTO import InfoDTO
+from ...api.DTO.InfoDTO import GeneralDTO, InfoDTO
 from ...api.DTO.NodeInfoDTO import NodeDataDTO, NodesDataDTO
-from ...api.DTO.InfoDTO import GeneralDTO
-from ...api.utils import from_dict, remove_val_fields
+from ...api.utils import remove_val_fields
 from ...const import API_LOCAL_IP, API_PRIVATE_URL
 from ..call_handler import get_with_retries
 from .apikeygenerator import ApiKeyGenerator
@@ -30,19 +33,19 @@ class DucoClient:
     @classmethod
     async def create(
         cls,
+        hass: HomeAssistant,
         api_key: str | None = None,
         private_url: str | None = None,
-        session: aiohttp.ClientSession | None = None,
     ):
         obj = DucoClient()
-        await obj._init(api_key, private_url, session)
+        await obj._init(hass, api_key, private_url)
         return obj
 
     async def _init(
         self,
-        api_key: str | None = None,
-        private_url: str | None = None,
-        session: aiohttp.ClientSession | None = None,
+        hass: HomeAssistant,
+        api_key: str,
+        private_url: str,
     ) -> None:
         _LOGGER.debug("Initialize Duco API client")
 
@@ -53,12 +56,15 @@ class DucoClient:
             "Connection": "keep-alive",
         }
 
+        # Load the certificate using async executor to avoid blocking I/O
         ssl_context = CustomSSLContext(hostname=API_LOCAL_IP)
-        ssl_context.load_verify_locations(self._pem())
-
-        self._session = session or aiohttp.ClientSession(
-            connector=TCPConnector(ssl=ssl_context)
+        await ssl_context.load_default_certs(hass)
+        await hass.async_add_executor_job(
+            ssl_context.load_verify_locations, self._get_pem_filepath()
         )
+        ssl_context.verify_mode = ssl.CERT_REQUIRED
+        connector = aiohttp.TCPConnector(ssl=ssl_context)
+        self._session = aiohttp.ClientSession(connector=connector)
 
         if api_key:
             self._headers.update({"Api-Key": api_key})
@@ -77,20 +83,19 @@ class DucoClient:
 
         _LOGGER.debug(f"Private API endpoint: {self._base_url}")
 
-    def _pem(self):
-        pem_path = pkg_resources.files(certs) / "api_cert.pem"
-        _LOGGER.debug(f"Loading pem file from {pem_path}")
-        return str(pem_path)
+    def _get_pem_filepath(self):
+        pem_filepath = pkg_resources.files(certs) / "api_cert.pem"
+        _LOGGER.debug(f"Loading pem file from {pem_filepath.name}")
+        return Path(pem_filepath)
 
     async def close(self):
         try:
             await self._session.close()
+
         except Exception as e:
             _LOGGER.error(f"Error while closing session: {e}")
 
     async def create_api_key(self, info_general: GeneralDTO) -> dict[str, str | float]:
-        _LOGGER.debug("Creating API key")
-
         duco_mac = info_general.Lan.Mac
         duco_serial = info_general.Board.SerialBoardBox
         duco_time = info_general.Board.Time
@@ -154,19 +159,19 @@ class DucoClient:
             return data
 
     async def get_api_info(self) -> ApiDetailsDTO:
-        _LOGGER.debug("Getting API info")
+        _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
         api_info_val_dict = await self.get("/api")
         api_info_dict = remove_val_fields(api_info_val_dict)
         return from_dict(ApiDetailsDTO, api_info_dict)  # type: ignore
 
     async def get_info(self) -> InfoDTO:
-        _LOGGER.debug("Getting info")
+        _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
         info_val_dict = await self.get("/info")
         info_dict = remove_val_fields(info_val_dict)
         return from_dict(InfoDTO, info_dict)  # type: ignore
 
     async def get_nodes(self) -> NodesDataDTO:
-        _LOGGER.debug("Getting info on all nodes")
+        _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
         nodes_val_dict = await self.get("/info/nodes")
         nodes = [
             from_dict(NodeDataDTO, remove_val_fields(node_dict))
@@ -175,7 +180,7 @@ class DucoClient:
         return NodesDataDTO(**{"Nodes": nodes})  # type: ignore
 
     async def get_node_info(self, node_id: int) -> NodeDataDTO:
-        _LOGGER.debug("Getting node info")
+        _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
         node_info_val_dict = await self.get(f"/info/nodes/{node_id}")
         node_info_dict = remove_val_fields(node_info_val_dict)
         return from_dict(NodeDataDTO, node_info_dict)  # type: ignore
