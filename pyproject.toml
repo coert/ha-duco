@@ -1,13 +1,36 @@
+[project]
+name = "my-ha-duco"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = ["aiohttp>=3.11.11", "dacite>=1.8.1", "orjson>=3.10.12"]
+
+[dependency-groups]
+dev = [
+    "black>=24.10.0",
+    "codespell>=2.3.0",
+    "flake8>=7.1.1",
+    "homeassistant>=2024.12.5",
+    "isort>=5.13.2",
+    "mypy>=1.13.0",
+    "pre-commit>=4.0.1",
+    "pyupgrade>=3.19.1",
+    "ruff>=0.8.4",
+    "types-orjson>=3.6.2",
+    "typing-extensions>=4.12.2",
+]
+
 [tool.poetry]
-name = "ha-duco"
+name = "my-ha-duco"
 version = "0.1.0"
 description = ""
-authors = ["coert <coert@alpha.one>"]
+authors = ["Your Name <you@example.com>"]
 readme = "README.md"
-packages = [{include = "ha_duco"}]
+packages = [{include = "my_ha_duco"}]
 
 [tool.poetry.dependencies]
-python = "^3.12"
+python = "^3.13"
 
 
 [build-system]

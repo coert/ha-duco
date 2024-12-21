@@ -2,71 +2,110 @@ import asyncio
 import inspect
 import logging
 from datetime import timedelta
+from typing import Any, Coroutine
 
-from dacite import from_dict
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry
-from homeassistant.helpers.device_registry import DeviceRegistry
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .api.DTO.DeviceDTO import DeviceDTO
-from .api.DTO.InfoDTO import BoardDTO
+from .api.DTO.InfoDTO import InfoDTO
+from .api.DTO.NodeInfoDTO import NodeDataDTO
 from .api.private.duco_client import ApiError, DucoClient
 from .const import API_PRIVATE_URL, DOMAIN, MANUFACTURER, PLATFORMS
 
 _LOGGER = logging.getLogger(__package__)
 
 # Time between data updates
-UPDATE_INTERVAL = timedelta(seconds=30)
+UPDATE_INTERVAL = timedelta(seconds=60)
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Set up Eplucon from a config entry."""
     _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")  # type: ignore
 
-    private_url = entry.data.get("api_endpoint", API_PRIVATE_URL)
-    duco_client = await DucoClient.create(hass, private_url=private_url)
+    host: str = config_entry.data["host"]
+    duco_client = await DucoClient.create(hass, private_url=host)
 
-    duco_board: BoardDTO = from_dict(BoardDTO, data=dict(entry.data["duco_board"]))
-    box_irbd: str = entry.data["box_irbd"]
-    box_index: int = entry.data["box_index"]
-    box_serial_number: str = entry.data["box_serial_number"]
-    box_service_number: str = entry.data["box_service_number"]
+    box_irbd: str | None = (
+        config_entry.data["box_irbd"] if "box_irbd" in config_entry.data else None
+    )
+    box_index: int | None = (
+        config_entry.data["box_index"] if "box_index" in config_entry.data else None
+    )
+    box_serial_number: str | None = (
+        config_entry.data["box_serial_number"]
+        if "box_serial_number" in config_entry.data
+        else None
+    )
+    box_service_number: str | None = (
+        config_entry.data["box_service_number"]
+        if "box_service_number" in config_entry.data
+        else None
+    )
+
+    calls = (duco_client.get_info(), duco_client.get_nodes())
+    duco_info, duco_nodes = await asyncio.gather(*calls)
+    duco_node_idxs = {
+        node.Node
+        for node in duco_nodes.Nodes
+        if node.General.Type == "BOX"
+        or node.General.Type == "UCCO2"
+        or node.General.Type == "BSRH"
+    }
+    duco_board = duco_info.General.Board
+    duco_id = duco_board.ProductIdBox
+    assert duco_id, "Invalid data"
+    duco_box_name = duco_board.BoxName
+    assert duco_box_name, "Invalid data"
+    docu_box_sub_type = duco_board.BoxSubTypeName
+    assert docu_box_sub_type, "Invalid data"
+    duco_box_type = " ".join(
+        [word.capitalize() for word in docu_box_sub_type.split("_")]
+    )
+
+    hass_device_registry = device_registry.async_get(hass)
+    hass_device_registry.async_get_or_create(
+        configuration_url=API_PRIVATE_URL,
+        config_entry_id=config_entry.entry_id,
+        identifiers={(DOMAIN, duco_client.api_key)},
+        manufacturer=MANUFACTURER,
+        suggested_area="Utility Room",
+        name=f"{MANUFACTURER} {duco_box_name.capitalize()} {duco_box_type}",
+        model=duco_box_type,
+    )
 
     dto_device = DeviceDTO(
-        id=duco_board.ProductIdBox,
-        account_module_index=str(duco_client.get_api_key()),
-        name=duco_board.BoxName.capitalize(),
-        type=" ".join(
-            [word.capitalize() for word in duco_board.BoxSubTypeName.split("_")]
-        ),
+        id=duco_id,
+        account_module_index=duco_client.api_key,
+        name=duco_box_name,
+        type=duco_box_type,
         box_irbd=box_irbd,
         box_index=box_index,
         box_serial_number=box_serial_number,
         box_service_number=box_service_number,
-        nodes=[],
-        board=duco_board,
-        lan=None,
-        ventilation=None,
+        info=duco_info,
+        nodes=duco_nodes.Nodes,
     )
-
-    hass_device_registry = device_registry.async_get(hass)
-    await register_device(dto_device, entry, hass_device_registry)
 
     async def async_update_data() -> DeviceDTO:
         """Fetch Duco data from API endpoint."""
         _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")  # type: ignore
 
         try:
-            calls = (duco_client.get_info(), duco_client.get_nodes())
-            info, nodes = await asyncio.gather(*calls)
+            calls: list[Coroutine[Any, Any, NodeDataDTO | InfoDTO]] = [
+                duco_client.get_node_info(idx) for idx in duco_node_idxs
+            ]
+            calls.append(duco_client.get_info())
+            duco_results = await asyncio.gather(*calls)
 
-            dto_device.lan = info.General.Lan
-            dto_device.ventilation = info.Ventilation
-
-            for node in nodes.Nodes:
-                dto_device.nodes.append(node)
+            dto_device.nodes.clear()
+            for node_result in duco_results:
+                if isinstance(node_result, InfoDTO):
+                    dto_device.info = node_result
+                else:
+                    dto_device.nodes.append(node_result)
 
             return dto_device
 
@@ -93,28 +132,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await coordinator.async_config_entry_first_refresh()
 
     # Store the coordinator in hass.data, so it's accessible in other parts of the integration
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+    hass.data.setdefault(DOMAIN, {})[config_entry.entry_id] = coordinator
 
     # Forward the setup to the sensor platform
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
 
     return True
-
-
-async def register_device(
-    device: DeviceDTO, entry: ConfigEntry, hass_device_registry: DeviceRegistry
-):
-    _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")  # type: ignore
-
-    hass_device_registry.async_get_or_create(
-        configuration_url=API_PRIVATE_URL,
-        config_entry_id=entry.entry_id,
-        identifiers={(DOMAIN, device.account_module_index)},
-        manufacturer=MANUFACTURER,
-        suggested_area="Utility Room",
-        name=device.name,
-        model=device.type,
-    )
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

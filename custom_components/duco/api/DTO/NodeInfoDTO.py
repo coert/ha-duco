@@ -46,6 +46,8 @@ class SensorDTO:
     Temp: Optional[float]
     Co2: Optional[int]
     IaqCo2: Optional[int]
+    Rh: Optional[int]
+    IaqRh: Optional[int]
 
 
 @dataclass
@@ -61,6 +63,14 @@ class NodeDataDTO:
     Ventilation: VentilationDTO
     Diag: DiagDTO
     Sensor: Optional[SensorDTO]
+
+    @property
+    def id(self) -> int:
+        return self.Node
+
+    @property
+    def account_module_index(self) -> str:
+        return f"{self.Node}-{self.General.SerialDuco}"
 
 
 @dataclass

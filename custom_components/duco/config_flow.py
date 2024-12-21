@@ -5,9 +5,10 @@ from typing import Any
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigFlowResult
+from homeassistant.components.zeroconf import ZeroconfServiceInfo
 from homeassistant.core import callback
+from homeassistant.helpers import selector
 
-from .api.private.duco_client import ApiError, DucoClient
 from .const import API_PRIVATE_URL, DOMAIN, MANUFACTURER
 
 _LOGGER = logging.getLogger(__package__)
@@ -16,11 +17,23 @@ _LOGGER = logging.getLogger(__package__)
 # Define the schema for the user input (API token)
 DATA_SCHEMA = vol.Schema(
     {
-        vol.Required("api_endpoint", default=API_PRIVATE_URL): str,
-        vol.Optional("box_irbd", default=""): str,
-        vol.Optional("box_index", default=""): str,
-        vol.Optional("box_serial_number", default=""): str,
-        vol.Optional("box_service_number", default=""): str,
+        vol.Required("api_endpoint", default=API_PRIVATE_URL): selector.TextSelector(
+            selector.TextSelectorConfig(
+                type=selector.TextSelectorType.URL
+            )  # Using URL text selector
+        ),
+        vol.Optional("box_irbd", default=""): selector.TextSelector(
+            selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+        ),
+        vol.Optional("box_index", default=""): selector.TextSelector(
+            selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+        ),
+        vol.Optional("box_serial_number", default=""): selector.TextSelector(
+            selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+        ),
+        vol.Optional("box_service_number", default=""): selector.TextSelector(
+            selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+        ),
     }
 )
 
@@ -34,97 +47,10 @@ class DucoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Handle the initial step."""
-        errors: dict[str, str] = {}
-
         _LOGGER.debug("Starting Duco config flow")
-
-        if user_input is not None:
-            # Attempt to connect to the API using the provided API token & endpoint
-            api_endpoint: str = user_input["api_endpoint"]
-            box_irbd: str = user_input["box_irbd"] if "box_irbd" in user_input else ""
-            box_index: str = (
-                user_input["box_index"] if "box_index" in user_input else ""
-            )
-            box_serial_number: str = (
-                user_input["box_serial_number"]
-                if "box_serial_number" in user_input
-                else ""
-            )
-            box_service_number: str = (
-                user_input["box_service_number"]
-                if "box_service_number" in user_input
-                else ""
-            )
-
-            duco_client = await DucoClient.create(self.hass, private_url=api_endpoint)
-
-            try:
-                info = await duco_client.get_info()
-
-                duco_board = info.General.Board
-                duco_lan = info.General.Lan
-
-                return self.async_create_entry(
-                    title=MANUFACTURER,
-                    data={
-                        "duco_board": duco_board,
-                        "duco_lan": duco_lan,
-                        "box_irbd": box_irbd,
-                        "box_index": box_index,
-                        "box_serial_number": box_serial_number,
-                        "box_service_number": box_service_number,
-                    },
-                )
-
-            except ApiError:
-                # Handle general API error
-                _LOGGER.info("Failed to fetch devices from Duco API")
-                errors["base"] = "api"
-
-            except Exception as e:
-                # Handle any other unexpected exceptions
-                _LOGGER.exception("Unexpected exception: %s", e)
-                errors["base"] = "unknown"
-
-            finally:
-                await duco_client.close()
-
-        # If the user input is not valid or an error occurred, show the form again with the error message
-        return self.async_show_form(
-            step_id="user",
-            data_schema=DATA_SCHEMA,
-            errors=errors,
-        )
-
-    @staticmethod
-    @callback
-    def async_get_options_flow(
-        config_entry: config_entries.ConfigEntry,
-    ) -> config_entries.OptionsFlow:
-        """Get the options flow for this handler."""
-        return DucoOptionsFlowHandler(config_entry.entry_id)
-
-
-class DucoOptionsFlowHandler(config_entries.OptionsFlow):
-    """Handle Duco options."""
-
-    def __init__(self, config_entry_id: str) -> None:
-        """Initialize Duco options flow."""
-        self._config_entry_id = config_entry_id
-
-    async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")  # type: ignore
-        """Manage the options for the integration."""
         errors: dict[str, str] = {}
 
-        config_entry = self.hass.config_entries.async_get_entry(self._config_entry_id)
-
         if user_input is not None:
-            self.hass.config_entries.async_update_entry(
-                config_entry, options=user_input
-            )
             api_endpoint = user_input.get("api_endpoint")
             box_irbd: str = user_input["box_irbd"] if "box_irbd" in user_input else ""
             box_index: str = (
@@ -141,37 +67,141 @@ class DucoOptionsFlowHandler(config_entries.OptionsFlow):
                 else ""
             )
 
-            client = await DucoClient.create(self.hass, private_url=api_endpoint)
+            # Attempt to connect to the API using the provided API token & endpoint
+            return self.async_create_entry(
+                title=MANUFACTURER,
+                data={
+                    "host": api_endpoint,
+                    "box_irbd": box_irbd,
+                    "box_index": box_index,
+                    "box_serial_number": box_serial_number,
+                    "box_service_number": box_service_number,
+                },
+            )
 
-            try:
-                info = await client.get_info()
-                duco_board = info.General.Board
-                duco_lan = info.General.Lan
+        else:
+            # If the user input is not valid or an error occurred, show the form again with the error message
+            return self.async_show_form(
+                step_id="user",
+                data_schema=DATA_SCHEMA,
+                errors=errors,
+            )
 
-                return self.async_create_entry(
-                    title=MANUFACTURER,
-                    data={
-                        "duco_board": duco_board,
-                        "duco_lan": duco_lan,
-                        "box_irbd": box_irbd,
-                        "box_index": box_index,
-                        "box_serial_number": box_serial_number,
-                        "box_service_number": box_service_number,
-                    },
-                )
+    async def async_step_zeroconf(
+        self, discovery_info: ZeroconfServiceInfo
+    ) -> ConfigFlowResult:
+        """Handle discovery via mDNS."""
+        _LOGGER.debug(f"Discovery info: {discovery_info}")
 
-            except ApiError:
-                # Handle general API error
-                _LOGGER.info("Failed to fetch devices from Duco API")
-                errors["base"] = "api"
+        valid_names = [f"{DOMAIN}_", f"{DOMAIN} "]
 
-            except Exception as e:
-                # Handle any other unexpected exceptions
-                _LOGGER.exception("Unexpected exception: %s", e)
-                errors["base"] = "unknown"
+        if not any(discovery_info.name.lower().startswith(x) for x in valid_names):
+            return self.async_abort(reason="not_duco_air_device")
 
-            finally:
-                await client.close()
+        # Extract information from mDNS discovery
+        # Use the IP address directly to avoid '.local' issues
+        host = f"https://{discovery_info.addresses[0]}"
+        unique_id = discovery_info.name.split(" ")[1].strip("[]")
+
+        _LOGGER.debug(f"Extracted host: {host}, unique_id: {unique_id}")
+
+        # Check if the device has already been configured
+        await self.async_set_unique_id(unique_id)
+        self._abort_if_unique_id_configured()
+
+        # Store discovery data in context
+        self.context["discovery"] = {  # type: ignore
+            "host": host,
+            "unique_id": unique_id,
+        }
+
+        # Ask user for confirmation
+        return await self.async_step_confirm()
+
+    async def async_step_confirm(self, user_input=None) -> ConfigFlowResult:
+        """Ask user to confirm adding the discovered device."""
+        discovery = self.context["discovery"]  # type: ignore
+        host = discovery["host"]
+        unique_id = discovery["unique_id"]
+
+        if user_input is not None:
+            # Create the entry upon confirmation
+            return self.async_create_entry(
+                title=MANUFACTURER,
+                data={
+                    "host": host,
+                    "unique_id": unique_id,
+                },
+            )
+
+        # Show confirmation form to the user
+        return self.async_show_form(
+            step_id="confirm",
+            description_placeholders={
+                "host": host,
+                "unique_id": unique_id,
+            },
+        )
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> config_entries.OptionsFlow:
+        """Get the options flow for this handler."""
+        return DucoOptionsFlowHandler(config_entry)
+
+
+class DucoOptionsFlowHandler(config_entries.OptionsFlow):
+    """Handle Duco options."""
+
+    this_config_entry_id: str
+
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        self.this_config_entry_id = config_entry.entry_id
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")  # type: ignore
+        """Manage the options for the integration."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            config_entry = self.hass.config_entries.async_get_entry(
+                self.this_config_entry_id
+            )
+            assert config_entry is not None, "Config entry not found"
+
+            self.hass.config_entries.async_update_entry(
+                config_entry, options=user_input
+            )
+            host = user_input.get("api_endpoint")
+            box_irbd: str = user_input["box_irbd"] if "box_irbd" in user_input else ""
+            box_index: str = (
+                user_input["box_index"] if "box_index" in user_input else ""
+            )
+            box_serial_number: str = (
+                user_input["box_serial_number"]
+                if "box_serial_number" in user_input
+                else ""
+            )
+            box_service_number: str = (
+                user_input["box_service_number"]
+                if "box_service_number" in user_input
+                else ""
+            )
+
+            return self.async_create_entry(
+                title=MANUFACTURER,
+                data={
+                    "host": host,
+                    "box_irbd": box_irbd,
+                    "box_index": box_index,
+                    "box_serial_number": box_serial_number,
+                    "box_service_number": box_service_number,
+                },
+            )
 
         # Show the options form with the current API token as the default value
         return self.async_show_form(
@@ -183,23 +213,35 @@ class DucoOptionsFlowHandler(config_entries.OptionsFlow):
                         default=self.config_entry.data.get(
                             "api_endpoint", API_PRIVATE_URL
                         ),
-                    ): str,
-                    vol.Required(
+                    ): selector.TextSelector(
+                        selector.TextSelectorConfig(
+                            type=selector.TextSelectorType.URL
+                        )  # Using URL text selector
+                    ),
+                    vol.Optional(
                         "box_irbd",
                         default=self.config_entry.data.get("box_irbd"),
-                    ): str,
-                    vol.Required(
+                    ): selector.TextSelector(
+                        selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+                    ),
+                    vol.Optional(
                         "box_index",
                         default=self.config_entry.data.get("box_index"),
-                    ): str,
-                    vol.Required(
+                    ): selector.TextSelector(
+                        selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+                    ),
+                    vol.Optional(
                         "box_serial_number",
                         default=self.config_entry.data.get("box_serial_number"),
-                    ): str,
-                    vol.Required(
+                    ): selector.TextSelector(
+                        selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+                    ),
+                    vol.Optional(
                         "box_service_number",
                         default=self.config_entry.data.get("box_service_number"),
-                    ): str,
+                    ): selector.TextSelector(
+                        selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+                    ),
                 }
             ),
             errors=errors,

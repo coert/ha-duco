@@ -9,7 +9,7 @@ from homeassistant.helpers import device_registry as dr
 from .api.DTO.DeviceDTO import DeviceDTO
 from .const import DOMAIN, MANUFACTURER
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = logging.getLogger(__package__)
 
 
 class DucoDevice:
