@@ -2,18 +2,16 @@ from __future__ import annotations
 
 import inspect
 import logging
-import ssl
 import time
-from pathlib import Path
-
 import aiohttp
+from pathlib import Path
+from urllib.parse import urlparse
+
 from dacite import from_dict
-from homeassistant.core import HomeAssistant
 
 from ...api.DTO.ApiDTO import ApiDetailsDTO
 from ...api.DTO.InfoDTO import GeneralDTO, InfoDTO
 from ...api.DTO.NodeInfoDTO import NodeDataDTO, NodesDataDTO
-from ...const import API_LOCAL_IP, API_PRIVATE_URL
 from ..utils import remove_val_fields
 from .rest_handler import RestHandler
 from .api_key_generator import ApiKeyGenerator
@@ -29,52 +27,81 @@ class ApiError(Exception):
 
 
 class DucoClient:
-    _rest_handler: RestHandler
+    _host: str
+    _hostname: str | None
+    _headers: dict[str, str]
+    _ssl_context: CustomSSLContext
+
+    _rest_handler: RestHandler | None
     _api_key: str
     _api_timestamp: float
 
-    @classmethod
-    async def create(
-        cls,
-        hass: HomeAssistant | None = None,
-        api_key: str | None = None,
-        private_url: str | None = None,
-    ):
-        obj = DucoClient()
-        await obj._init(hass, api_key, private_url)
-        return obj
+    @property
+    def host(self) -> str:
+        return self._host
 
-    async def _init(
+    @property
+    def hostname(self) -> str | None:
+        return self._hostname
+
+    @property
+    def ssl_context(self) -> CustomSSLContext:
+        return self._ssl_context
+
+    @property
+    def api_key(self) -> str:
+        return self._api_key
+
+    @property
+    def api_timestamp(self) -> float:
+        return self._api_timestamp
+
+    @property
+    def rest_handler(self) -> RestHandler:
+        if self._rest_handler:
+            return self._rest_handler
+
+        else:
+            raise ApiError("RestHandler not initialized")
+            # return RestHandler(self.host, {}, aiohttp.TCPConnector(verify_ssl=False))
+
+    def __init__(
         self,
-        hass: HomeAssistant | None,
-        api_key: str | None,
-        private_url: str | None,
+        host: str,
     ) -> None:
-        _LOGGER.debug("Initialize Duco API client")
+        self._host = host
+        self._hostname = urlparse(host).hostname
 
-        self._base_url = private_url if private_url else API_PRIVATE_URL
         self._headers = {
             "Accept-Encoding": "gzip, deflate",
             "Accept": "*/*",
             "Connection": "keep-alive",
         }
 
-        # Load the certificate using async executor to avoid blocking I/O
-        ssl_context = CustomSSLContext(hostname=API_LOCAL_IP)
-        ssl_context.verify_mode = ssl.CERT_REQUIRED
+        self._rest_handler = None
 
-        if hass:
-            hass.async_add_executor_job(ssl_context.load_default_certs)
-            await hass.async_add_executor_job(
-                ssl_context.load_verify_locations, self._get_pem_filepath()
-            )
+    async def connect_insecure(self) -> None:
+        if self._rest_handler:
+            await self._rest_handler.close()
+            self._rest_handler = None
 
-        else:
-            ssl_context.load_default_certs()
-            ssl_context.load_verify_locations(self._get_pem_filepath())
+        self._rest_handler = RestHandler(
+            self.host, self._headers, aiohttp.TCPConnector(verify_ssl=False)
+        )
+
+    async def connect(
+        self,
+        ssl_context: CustomSSLContext,
+        api_key: str | None = None,
+    ) -> None:
+        _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
+
+        if self._rest_handler:
+            await self._rest_handler.close()
+            self._rest_handler = None
 
         connector = aiohttp.TCPConnector(ssl=ssl_context)
-        self._rest_handler = RestHandler(self._base_url, self._headers, connector)
+        self._rest_handler = RestHandler(self._host, self._headers, connector)
 
         if api_key:
             key_pair = {
@@ -91,21 +118,7 @@ class DucoClient:
         self._api_key = str(key_pair["api_key"])
         self._api_timestamp = float(key_pair["timestamp"])
 
-        _LOGGER.debug(f"Private API endpoint: {self._base_url}")
-
-    @property
-    def rest_handler(self) -> RestHandler:
-        return self._rest_handler
-
-    @property
-    def api_key(self) -> str:
-        return self._api_key
-
-    @property
-    def api_timestamp(self) -> float:
-        return self._api_timestamp
-
-    def _get_pem_filepath(self):
+    def get_pem_filepath(self):
         pem_filepath = _FILE_PATH.parents[2] / "certs/api_cert.pem"
         assert pem_filepath.exists(), f"File not found: {pem_filepath}"
         _LOGGER.debug(f"Loading pem file from {pem_filepath.name}")

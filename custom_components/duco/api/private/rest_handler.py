@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 from aiohttp import ClientResponseError, ClientSession, TCPConnector
+from aiohttp.client import ClientTimeout, DEFAULT_TIMEOUT
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 
@@ -14,28 +15,7 @@ class RestHandler:
 
     _retriable_status_codes = {503}
 
-    _session: ClientSession
-
-    def __init__(
-        self,
-        base_url: str,
-        headers: dict[str, str],
-        connector: TCPConnector,
-    ):
-        self._base_url = base_url
-        self._headers = headers
-        self._connector = connector
-
-        self._session = aiohttp.ClientSession(connector=connector)
-
-    def __del__(self):
-        if self._session:
-            try:
-                asyncio.create_task(self.close())
-
-            except Exception as e:
-                _LOGGER.warning(f"Error while closing session: {e}")
-                asyncio.new_event_loop().run_until_complete(self.close())
+    _client_session: ClientSession
 
     @property
     def max_retries(self) -> int:
@@ -53,9 +33,36 @@ class RestHandler:
     def base_delay(self, value: float):
         self._base_delay = value
 
+    def __init__(
+        self,
+        base_url: str,
+        headers: dict[str, str],
+        connector: TCPConnector | None = None,
+        timeout: ClientTimeout = DEFAULT_TIMEOUT,
+    ):
+        self._base_url = base_url
+        self._headers = headers
+        self._connector = connector
+
+        if connector is None:
+            self._client_session = aiohttp.ClientSession(timeout=timeout)
+
+        else:
+            self._client_session = aiohttp.ClientSession(
+                connector=connector, timeout=timeout
+            )
+
+    def __del__(self):
+        try:
+            asyncio.create_task(self.close())
+
+        except Exception as e:
+            _LOGGER.warning(f"Error while closing session: {e}")
+            asyncio.new_event_loop().run_until_complete(self.close())
+
     async def close(self):
         try:
-            await self._session.close()
+            await self._client_session.close()
 
         except Exception as e:
             _LOGGER.error(f"Error while closing session: {e}")
@@ -68,32 +75,36 @@ class RestHandler:
         return {}
 
     async def post(self, endpoint: str):
-        async with self._session.post(
-            f"{self._base_url}{endpoint}", headers=self._headers
+        async with self._client_session.post(
+            f"{self._base_url}{endpoint}",
+            headers=self._headers,
         ) as response:
             response.raise_for_status()
             data = await response.json()
             return data
 
     async def patch(self, endpoint: str):
-        async with self._session.patch(
-            f"{self._base_url}{endpoint}", headers=self._headers
+        async with self._client_session.patch(
+            f"{self._base_url}{endpoint}",
+            headers=self._headers,
         ) as response:
             response.raise_for_status()
             data = await response.json()
             return data
 
     async def delete(self, endpoint: str):
-        async with self._session.delete(
-            f"{self._base_url}{endpoint}", headers=self._headers
+        async with self._client_session.delete(
+            f"{self._base_url}{endpoint}",
+            headers=self._headers,
         ) as response:
             response.raise_for_status()
             data = await response.json()
             return data
 
     async def head(self, endpoint: str):
-        async with self._session.head(
-            f"{self._base_url}{endpoint}", headers=self._headers
+        async with self._client_session.head(
+            f"{self._base_url}{endpoint}",
+            headers=self._headers,
         ) as response:
             response.raise_for_status()
             data = await response.json()
@@ -118,42 +129,21 @@ class RestHandler:
         retries = 0
         while retries < self.max_retries:
             try:
-                # Use a shared session if provided, otherwise create one
-                if not self._session:
-                    async with ClientSession(
-                        connector=self._connector
-                    ) as local_session:
-                        async with local_session.get(
-                            url, headers=self._headers
-                        ) as response:
-                            if response.status in self._retriable_status_codes:
-                                raise ClientResponseError(
-                                    request_info=response.request_info,
-                                    history=response.history,
-                                    status=response.status,
-                                    message="Service Unavailable",
-                                )
+                async with self._client_session.get(
+                    url, headers=self._headers
+                ) as response:
+                    if response.status in self._retriable_status_codes:
+                        raise ClientResponseError(
+                            request_info=response.request_info,
+                            history=response.history,
+                            status=response.status,
+                            message="Service Unavailable",
+                        )
 
-                            else:
-                                response.raise_for_status()
+                    else:
+                        response.raise_for_status()
 
-                            return await response.json()
-                else:
-                    async with self._session.get(
-                        url, headers=self._headers
-                    ) as response:
-                        if response.status in self._retriable_status_codes:
-                            raise ClientResponseError(
-                                request_info=response.request_info,
-                                history=response.history,
-                                status=response.status,
-                                message="Service Unavailable",
-                            )
-
-                        else:
-                            response.raise_for_status()
-
-                        return await response.json()
+                    return await response.json()
 
             except ClientResponseError as e:
                 if e.status in self._retriable_status_codes:

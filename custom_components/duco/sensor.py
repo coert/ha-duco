@@ -1,18 +1,14 @@
 from __future__ import annotations
 
 import inspect
-import logging
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
 
-from dacite import from_dict
 from homeassistant.components.sensor import (
     SensorEntity,
     SensorEntityDescription,
 )
 from homeassistant.components.sensor.const import SensorStateClass
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     PERCENTAGE,
     REVOLUTIONS_PER_MINUTE,
@@ -25,130 +21,136 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
 from homeassistant.components.sensor.const import SensorDeviceClass
-from homeassistant.helpers.update_coordinator import (
-    CoordinatorEntity,
-    DataUpdateCoordinator,
-)
 
-from .api.DTO.DeviceDTO import DeviceDTO
+from . import DucoConfigEntry
+
+from .const import LOGGER
+from .api.DTO.InfoDTO import InfoDTO
 from .api.DTO.NodeInfoDTO import NodeDataDTO
-from .const import DOMAIN, MANUFACTURER
-
-_LOGGER = logging.getLogger(__package__)
+from .entity import DucoEntity
+from .coordinator import DucoDeviceUpdateCoordinator
 
 
 @dataclass(kw_only=True, frozen=True)
-class DucoSensorEntityDescription(SensorEntityDescription):
+class DucoBoxSensorEntityDescription(SensorEntityDescription):
     """Describes an Duco sensor entity."""
 
-    key: str
-    name: str | None = None
-    type: str | None = None
-    sensor_key: str | None = None
-    exists_fn: Callable[[Any], bool] = lambda _: True
-    value_fn: Callable[[Any], float | int | str | None] = lambda _: None
+    enabled_fn: Callable[[InfoDTO], bool] = lambda data: True
+    exists_fn: Callable[[InfoDTO], bool] = lambda _: True
+    value_fn: Callable[[InfoDTO], float | int | str | None] = lambda _: None
+
+
+@dataclass(kw_only=True, frozen=True)
+class DucoNodeSensorEntityDescription(SensorEntityDescription):
+    """Describes an Duco sensor entity."""
+
+    sensor_key: str
+    type: str
+    enabled_fn: Callable[[NodeDataDTO], bool] = lambda data: True
+    exists_fn: Callable[[NodeDataDTO], bool] = lambda _: True
+    value_fn: Callable[[NodeDataDTO], float | int | str | None] = lambda _: None
 
 
 # Define the sensor types
-SENSORS_DUCOBOX: tuple[DucoSensorEntityDescription, ...] = (
-    DucoSensorEntityDescription(
+SENSORS_DUCOBOX: tuple[DucoBoxSensorEntityDescription, ...] = (
+    DucoBoxSensorEntityDescription(
         key="temp_oda",
         name="Temperature (Outdoor)",
         icon="mdi:thermometer",
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-        value_fn=lambda device: _proc_temp(device.info.Ventilation.Sensor.TempOda),
-        exists_fn=lambda device: device.info.Ventilation is not None
-        and device.info.Ventilation.Sensor is not None
-        and device.info.Ventilation.Sensor.TempOda is not None,
+        value_fn=lambda device: _proc_temp(device.Ventilation.Sensor.TempOda),
+        exists_fn=lambda device: device.Ventilation is not None
+        and device.Ventilation.Sensor is not None
+        and device.Ventilation.Sensor.TempOda is not None,
     ),
-    DucoSensorEntityDescription(
+    DucoBoxSensorEntityDescription(
         key="temp_sup",
         name="Temperature (Supply)",
         icon="mdi:thermometer",
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-        value_fn=lambda device: _proc_temp(device.info.Ventilation.Sensor.TempSup),
-        exists_fn=lambda device: device.info.Ventilation is not None
-        and device.info.Ventilation.Sensor is not None
-        and device.info.Ventilation.Sensor.TempOda is not None,
+        value_fn=lambda device: _proc_temp(device.Ventilation.Sensor.TempSup),
+        exists_fn=lambda device: device.Ventilation is not None
+        and device.Ventilation.Sensor is not None
+        and device.Ventilation.Sensor.TempOda is not None,
     ),
-    DucoSensorEntityDescription(
+    DucoBoxSensorEntityDescription(
         key="temp_eta",
         name="Temperature (Extract)",
         icon="mdi:thermometer",
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-        value_fn=lambda device: _proc_temp(device.info.Ventilation.Sensor.TempEta),
-        exists_fn=lambda device: device.info.Ventilation is not None
-        and device.info.Ventilation.Sensor is not None
-        and device.info.Ventilation.Sensor.TempOda is not None,
+        value_fn=lambda device: _proc_temp(device.Ventilation.Sensor.TempEta),
+        exists_fn=lambda device: device.Ventilation is not None
+        and device.Ventilation.Sensor is not None
+        and device.Ventilation.Sensor.TempOda is not None,
     ),
-    DucoSensorEntityDescription(
+    DucoBoxSensorEntityDescription(
         key="temp_eha",
         name="Temperature (Exhaust)",
         icon="mdi:thermometer",
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-        value_fn=lambda device: _proc_temp(device.info.Ventilation.Sensor.TempEha),
-        exists_fn=lambda device: device.info.Ventilation is not None
-        and device.info.Ventilation.Sensor is not None
-        and device.info.Ventilation.Sensor.TempOda is not None,
+        value_fn=lambda device: _proc_temp(device.Ventilation.Sensor.TempEha),
+        exists_fn=lambda device: device.Ventilation is not None
+        and device.Ventilation.Sensor is not None
+        and device.Ventilation.Sensor.TempOda is not None,
     ),
-    DucoSensorEntityDescription(
+    DucoBoxSensorEntityDescription(
         key="fan_speed_sup",
         name="Fan Speed (Supply)",
         icon="mdi:fan",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=REVOLUTIONS_PER_MINUTE,
-        value_fn=lambda device: _proc_speed(device.info.Ventilation.Fan.SpeedSup),
-        exists_fn=lambda device: device.info.Ventilation is not None
-        and device.info.Ventilation.Fan is not None
-        and device.info.Ventilation.Fan.SpeedSup is not None,
+        value_fn=lambda device: _proc_speed(device.Ventilation.Fan.SpeedSup),
+        exists_fn=lambda device: device.Ventilation is not None
+        and device.Ventilation.Fan is not None
+        and device.Ventilation.Fan.SpeedSup is not None,
     ),
-    DucoSensorEntityDescription(
+    DucoBoxSensorEntityDescription(
         key="fan_speed_eha",
         name="Fan Speed (Exhaust)",
         icon="mdi:fan",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=REVOLUTIONS_PER_MINUTE,
-        value_fn=lambda device: _proc_speed(device.info.Ventilation.Fan.SpeedEha),
-        exists_fn=lambda device: device.info.Ventilation is not None
-        and device.info.Ventilation.Fan is not None
-        and device.info.Ventilation.Fan.SpeedEha is not None,
+        value_fn=lambda device: _proc_speed(device.Ventilation.Fan.SpeedEha),
+        exists_fn=lambda device: device.Ventilation is not None
+        and device.Ventilation.Fan is not None
+        and device.Ventilation.Fan.SpeedEha is not None,
     ),
-    DucoSensorEntityDescription(
+    DucoBoxSensorEntityDescription(
         key="pressure_supply",
         name="Pressure (Supply)",
         icon="mdi:arrow-collapse-down",
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.PRESSURE,
         native_unit_of_measurement=UnitOfPressure.PA,
-        value_fn=lambda device: _proc_press(device.info.Ventilation.Fan.PressSup),
-        exists_fn=lambda device: device.info.Ventilation is not None
-        and device.info.Ventilation.Fan is not None
-        and device.info.Ventilation.Fan.PressSup is not None,
+        value_fn=lambda device: _proc_press(device.Ventilation.Fan.PressSup),
+        exists_fn=lambda device: device.Ventilation is not None
+        and device.Ventilation.Fan is not None
+        and device.Ventilation.Fan.PressSup is not None,
     ),
-    DucoSensorEntityDescription(
+    DucoBoxSensorEntityDescription(
         key="pressure_eha",
         name="Pressure (Exhaust)",
         icon="mdi:arrow-collapse-up",
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.PRESSURE,
         native_unit_of_measurement=UnitOfPressure.PA,
-        value_fn=lambda device: _proc_press(device.info.Ventilation.Fan.PressEha),
-        exists_fn=lambda device: device.info.Ventilation is not None
-        and device.info.Ventilation.Fan is not None
-        and device.info.Ventilation.Fan.PressEha is not None,
+        value_fn=lambda device: _proc_press(device.Ventilation.Fan.PressEha),
+        exists_fn=lambda device: device.Ventilation is not None
+        and device.Ventilation.Fan is not None
+        and device.Ventilation.Fan.PressEha is not None,
     ),
 )
-SENSORS_ZONES: dict[str, tuple[DucoSensorEntityDescription, ...]] = {
+SENSORS_ZONES: dict[str, tuple[DucoNodeSensorEntityDescription, ...]] = {
     "BOX": (
-        DucoSensorEntityDescription(
+        DucoNodeSensorEntityDescription(
             key="mode",
             name="Ventilation Mode",
             sensor_key="Mode",
@@ -157,7 +159,7 @@ SENSORS_ZONES: dict[str, tuple[DucoSensorEntityDescription, ...]] = {
             exists_fn=lambda node: node.Ventilation is not None
             and node.Ventilation.Mode is not None,
         ),
-        DucoSensorEntityDescription(
+        DucoNodeSensorEntityDescription(
             key="state",
             name="Ventilation State",
             sensor_key="State",
@@ -166,7 +168,7 @@ SENSORS_ZONES: dict[str, tuple[DucoSensorEntityDescription, ...]] = {
             exists_fn=lambda node: node.Ventilation is not None
             and node.Ventilation.State is not None,
         ),
-        DucoSensorEntityDescription(
+        DucoNodeSensorEntityDescription(
             key="flow_lvl_tgt",
             name="Flow Level Target",
             sensor_key="FlowLvlTgt",
@@ -176,7 +178,7 @@ SENSORS_ZONES: dict[str, tuple[DucoSensorEntityDescription, ...]] = {
             exists_fn=lambda node: node.Ventilation is not None
             and node.Ventilation.FlowLvlTgt is not None,
         ),
-        DucoSensorEntityDescription(
+        DucoNodeSensorEntityDescription(
             key="time_state_remain",
             name="Time State Remaining",
             sensor_key="TimeStateRemain",
@@ -186,7 +188,7 @@ SENSORS_ZONES: dict[str, tuple[DucoSensorEntityDescription, ...]] = {
             exists_fn=lambda node: node.Ventilation is not None
             and node.Ventilation.TimeStateRemain is not None,
         ),
-        DucoSensorEntityDescription(
+        DucoNodeSensorEntityDescription(
             key="time_state_end",
             name="Time State Ending",
             sensor_key="TimeStateEnd",
@@ -196,9 +198,9 @@ SENSORS_ZONES: dict[str, tuple[DucoSensorEntityDescription, ...]] = {
             exists_fn=lambda node: node.Ventilation is not None
             and node.Ventilation.TimeStateEnd is not None,
         ),
-        DucoSensorEntityDescription(
+        DucoNodeSensorEntityDescription(
             key="temp",
-            name="Temerature",
+            name="Temperature",
             sensor_key="Temp",
             type="BOX",
             native_unit_of_measurement=UnitOfTemperature.CELSIUS,
@@ -207,7 +209,7 @@ SENSORS_ZONES: dict[str, tuple[DucoSensorEntityDescription, ...]] = {
             exists_fn=lambda node: node.Sensor is not None
             and node.Sensor.Temp is not None,
         ),
-        DucoSensorEntityDescription(
+        DucoNodeSensorEntityDescription(
             key="rh",
             name="Relative Humidity",
             sensor_key="Rh",
@@ -218,7 +220,7 @@ SENSORS_ZONES: dict[str, tuple[DucoSensorEntityDescription, ...]] = {
             exists_fn=lambda node: node.Sensor is not None
             and node.Sensor.Rh is not None,
         ),
-        DucoSensorEntityDescription(
+        DucoNodeSensorEntityDescription(
             key="iaq_rh",
             name="Humidity Air Quality",
             sensor_key="IaqRh",
@@ -230,9 +232,9 @@ SENSORS_ZONES: dict[str, tuple[DucoSensorEntityDescription, ...]] = {
         ),
     ),
     "UCCO2": (
-        DucoSensorEntityDescription(
+        DucoNodeSensorEntityDescription(
             key="temp",
-            name="Temerature",
+            name="Temperature",
             sensor_key="Temp",
             type="UCCO2",
             native_unit_of_measurement=UnitOfTemperature.CELSIUS,
@@ -241,7 +243,7 @@ SENSORS_ZONES: dict[str, tuple[DucoSensorEntityDescription, ...]] = {
             exists_fn=lambda node: node.Sensor is not None
             and node.Sensor.Temp is not None,
         ),
-        DucoSensorEntityDescription(
+        DucoNodeSensorEntityDescription(
             key="co2",
             name="CO₂",
             sensor_key="Co2",
@@ -252,7 +254,7 @@ SENSORS_ZONES: dict[str, tuple[DucoSensorEntityDescription, ...]] = {
             exists_fn=lambda node: node.Sensor is not None
             and node.Sensor.Co2 is not None,
         ),
-        DucoSensorEntityDescription(
+        DucoNodeSensorEntityDescription(
             key="iaq_co2",
             name="CO₂ Air Quality",
             sensor_key="IaqCo2",
@@ -264,9 +266,9 @@ SENSORS_ZONES: dict[str, tuple[DucoSensorEntityDescription, ...]] = {
         ),
     ),
     "BSRH": (
-        DucoSensorEntityDescription(
+        DucoNodeSensorEntityDescription(
             key="temp",
-            name="Temerature",
+            name="Temperature",
             sensor_key="Temp",
             type="BSRH",
             native_unit_of_measurement=UnitOfTemperature.CELSIUS,
@@ -275,7 +277,7 @@ SENSORS_ZONES: dict[str, tuple[DucoSensorEntityDescription, ...]] = {
             exists_fn=lambda node: node.Sensor is not None
             and node.Sensor.Temp is not None,
         ),
-        DucoSensorEntityDescription(
+        DucoNodeSensorEntityDescription(
             key="rh",
             name="Relative Humidity",
             sensor_key="Rh",
@@ -286,7 +288,7 @@ SENSORS_ZONES: dict[str, tuple[DucoSensorEntityDescription, ...]] = {
             exists_fn=lambda node: node.Sensor is not None
             and node.Sensor.Rh is not None,
         ),
-        DucoSensorEntityDescription(
+        DucoNodeSensorEntityDescription(
             key="iaq_rh",
             name="Humidity Air Quality",
             sensor_key="IaqRh",
@@ -300,121 +302,107 @@ SENSORS_ZONES: dict[str, tuple[DucoSensorEntityDescription, ...]] = {
 }
 
 
-def _proc_temp(temp: float) -> float:
-    return temp / 10.0
+def _proc_temp(temp: float | None) -> float | None:
+    return temp / 10.0 if temp is not None else None
 
 
-def _proc_speed(speed: int) -> int:
-    return speed
+def _proc_speed(speed: int | None) -> int | None:
+    return speed if speed is not None else None
 
 
-def _proc_press(press: int) -> int:
-    return press
+def _proc_press(press: int | None) -> int | None:
+    return press if press is not None else None
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    entry: DucoConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")  # type: ignore
-    """Set up Duco sensor based on a config entry."""
-    coordinator: DataUpdateCoordinator = hass.data[DOMAIN][config_entry.entry_id]
+    LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")  # type: ignore
 
-    # Ensure the coordinator has refreshed its data
-    await coordinator.async_config_entry_first_refresh()
-    device: DeviceDTO = from_dict(data_class=DeviceDTO, data=coordinator.data)
-
-    async_add_entities(
-        DucoSensorEntity(coordinator, device, description)
+    box_data = entry.runtime_data.data.info
+    box_entities: list = [
+        DucoBoxSensorEntity(entry.runtime_data, description)
         for description in SENSORS_DUCOBOX
-        if description.exists_fn(device)
-    )
+        if description.exists_fn(box_data)
+    ]
+    async_add_entities(box_entities)
 
-    for node in device.nodes:
-        async_add_entities(
-            DucoNodeSensorEntity(coordinator, node, description)
-            for description in SENSORS_ZONES.get(node.General.Type, ())
+    nodes_data = entry.runtime_data.data.nodes
+    for node in nodes_data:
+        key = node.General.Type
+        node_entities: list = [
+            DucoNodeSensorEntity(entry.runtime_data, description, node)
+            for description in SENSORS_ZONES.get(key, ())
             if description.exists_fn(node)
-        )
+        ]
+        async_add_entities(node_entities)
 
 
-class DucoSensorEntity(CoordinatorEntity, SensorEntity):
-    """Representation of an Duco sensor."""
+class DucoBoxSensorEntity(DucoEntity, SensorEntity):
+    """Representation of a Duco Sensor."""
 
-    device: DeviceDTO | NodeDataDTO
-    entity_description: DucoSensorEntityDescription
+    entity_description: DucoBoxSensorEntityDescription
 
     def __init__(
         self,
-        coordinator,
-        device: DeviceDTO | NodeDataDTO,
-        entity_description: DucoSensorEntityDescription,
+        coordinator: DucoDeviceUpdateCoordinator,
+        description: DucoBoxSensorEntityDescription,
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
 
-        self.device = device
-        self.entity_description = entity_description
-        self._attr_name = f"{entity_description.name}"
-        self._attr_unique_id = f"{device.id}_{entity_description.key}"
-        self._update_device_data()
-
-    @property
-    def device_info(self) -> dict:
-        """Return information to link this entity with the correct device."""
-        return {
-            "manufacturer": MANUFACTURER,
-            "identifiers": {(DOMAIN, self.device.account_module_index)},
-        }
-
-    def _update_device_data(self):
-        """Update the internal data from the coordinator."""
-        # Assuming devices are updated in the coordinator data
-        updated_device = from_dict(data_class=DeviceDTO, data=self.coordinator.data)  # type: ignore
-        if updated_device.id == self.device.id:
-            self.device = updated_device
+        self.entity_description = description
+        self._attr_unique_id = f"{coordinator.config_entry.unique_id}_{description.key}"
+        if not description.enabled_fn(self.coordinator.data.info):
+            self._attr_entity_registry_enabled_default = False
 
     @property
     def native_value(self) -> StateType:
-        """Return the state of the sensor."""
-        return self.entity_description.value_fn(self.device)  # type: ignore
+        """Return the sensor value."""
+        return self.entity_description.value_fn(self.coordinator.data.info)
 
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        _LOGGER.debug(f"Getting update from coordinator in sensor {self.name}.")
-        self._update_device_data()
-        super()._handle_coordinator_update()
+    @property
+    def available(self) -> bool:
+        """Return availability of meter."""
+        return super().available and self.native_value is not None
 
 
-class DucoNodeSensorEntity(DucoSensorEntity):
-    """Representation of an Duco sensor for a node."""
+class DucoNodeSensorEntity(DucoEntity, SensorEntity):
+    """Representation of a Duco Sensor."""
 
+    entity_description: DucoNodeSensorEntityDescription
     node: NodeDataDTO
 
     def __init__(
         self,
-        coordinator,
+        coordinator: DucoDeviceUpdateCoordinator,
+        description: DucoNodeSensorEntityDescription,
         node: NodeDataDTO,
-        entity_description: DucoSensorEntityDescription,
     ) -> None:
         """Initialize the sensor."""
-        super().__init__(coordinator, node, entity_description)
+        super().__init__(coordinator, node)
 
+        self.entity_description = description
         self.node = node
-        self._attr_name = f"{node.General.Name} {entity_description.name}"
-        self._attr_unique_id = f"{node.Node}_{entity_description.key}"
-        self._update_node_data()
 
-    def _update_node_data(self):
-        """Update the internal data from the coordinator."""
-        # Assuming devices are updated in the coordinator data
-        updated_node = from_dict(data_class=NodeDataDTO, data=self.coordinator.data)  # type: ignore
-        if updated_node.id == self.device.id:
-            self.device = updated_node
+        self._attr_unique_id = (
+            f"{coordinator.config_entry.unique_id}_{description.key}_{node.Node}"
+        )
+        if not description.enabled_fn(node):
+            self._attr_entity_registry_enabled_default = False
 
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        _LOGGER.debug(f"Getting update from coordinator in sensor {self.name}.")
-        self._update_node_data()
-        super()._handle_coordinator_update()
+    @property
+    def native_value(self) -> StateType:
+        """Return the sensor value."""
+        return (
+            self.entity_description.value_fn(self.node)
+            if self.entity_description.exists_fn(self.node)
+            else None
+        )
+
+    @property
+    def available(self) -> bool:
+        """Return availability of meter."""
+        return super().available and self.native_value is not None

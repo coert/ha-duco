@@ -1,13 +1,8 @@
-import inspect
-import logging
 import ssl
-
-_LOGGER: logging.Logger = logging.getLogger(__package__)
 
 
 class CustomSSLContext(ssl.SSLContext):
-    def __init__(self, *args, hostname: str | None = None, **kwargs):
-        _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")  # type: ignore
+    def __init__(self, hostname: str | None = None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._hostname = hostname or "192.168.4.1"
         self.verify_mode = ssl.CERT_REQUIRED
