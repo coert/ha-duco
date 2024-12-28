@@ -32,10 +32,10 @@ class NetworkDucoDTO:
 @dataclass
 class VentilationDTO:
     State: str
-    TimeStateRemain: int
-    TimeStateEnd: int
-    FlowLvlOvrl: int
-    FlowLvlReqSensor: int
+    TimeStateRemain: Optional[int]
+    TimeStateEnd: Optional[int]
+    FlowLvlOvrl: Optional[int]
+    FlowLvlReqSensor: Optional[int]
     Mode: Optional[str]
     FlowLvlTgt: Optional[int]
     Pos: Optional[int]

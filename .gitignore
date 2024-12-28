@@ -163,3 +163,4 @@ cython_debug/
 custom_components/duco/test.py
 custom_components/main.py
 custom_components/duco.tar.bz2
+.vscode/tasks.json

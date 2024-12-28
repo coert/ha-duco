@@ -361,7 +361,11 @@ class DucoBoxSensorEntity(DucoEntity, SensorEntity):
     @property
     def native_value(self) -> StateType:
         """Return the sensor value."""
-        return self.entity_description.value_fn(self.coordinator.data.info)
+        return (
+            self.entity_description.value_fn(self.coordinator.data.info)
+            if self.entity_description.exists_fn(self.coordinator.data.info)
+            else None
+        )
 
     @property
     def available(self) -> bool:
