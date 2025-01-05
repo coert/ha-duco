@@ -1,3 +1,4 @@
+from typing import Optional
 from dataclasses import dataclass
 
 
@@ -11,6 +12,6 @@ class ApiInfoDTO:
 
 @dataclass
 class ApiDetailsDTO:
-    ApiVersion: str
+    ApiVersion: Optional[str]
     PublicApiVersion: str
     ApiInfo: list[ApiInfoDTO]

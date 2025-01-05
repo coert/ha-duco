@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from .InfoDTO import BoardDTO, LanDTO, VentilationDTO
+from .InfoDTO import InfoDTO
 from .NodeInfoDTO import NodeDataDTO
 
 
@@ -11,11 +11,9 @@ class DeviceDTO:
     account_module_index: str
     name: str
     type: str
-    box_irbd: str
-    box_index: int
-    box_serial_number: str
-    box_service_number: str
+    box_irbd: Optional[str]
+    box_index: Optional[int]
+    box_serial_number: Optional[str]
+    box_service_number: Optional[str]
+    info: InfoDTO
     nodes: list[NodeDataDTO]
-    board: Optional[BoardDTO]
-    lan: Optional[LanDTO]
-    ventilation: Optional[VentilationDTO]
