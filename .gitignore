@@ -163,3 +163,8 @@ cython_debug/
 custom_components/duco/test.py
 custom_components/main.py
 custom_components/duco.tar.bz2
+.vscode/tasks.json
+custom_components/duco/certs/certificate.csr
+custom_components/duco/certs/certificate.pem
+custom_components/duco/certs/private.key
+custom_components/duco/certs/v3.ext
