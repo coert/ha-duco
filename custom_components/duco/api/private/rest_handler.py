@@ -1,5 +1,6 @@
 import asyncio
 import aiohttp
+import inspect
 import logging
 from typing import Any
 
@@ -16,22 +17,6 @@ class RestHandler:
     _retriable_status_codes = {503}
 
     _client_session: ClientSession
-
-    @property
-    def max_retries(self) -> int:
-        return self._max_retries
-
-    @max_retries.setter
-    def max_retries(self, value: int):
-        self._max_retries = value
-
-    @property
-    def base_delay(self) -> float:
-        return self._base_delay
-
-    @base_delay.setter
-    def base_delay(self, value: float):
-        self._base_delay = value
 
     def __init__(
         self,
@@ -60,6 +45,22 @@ class RestHandler:
             _LOGGER.warning(f"Error while closing session: {e}")
             asyncio.new_event_loop().run_until_complete(self.close())
 
+    @property
+    def max_retries(self) -> int:
+        return self._max_retries
+
+    @max_retries.setter
+    def max_retries(self, value: int):
+        self._max_retries = value
+
+    @property
+    def base_delay(self) -> float:
+        return self._base_delay
+
+    @base_delay.setter
+    def base_delay(self, value: float):
+        self._base_delay = value
+
     async def close(self):
         try:
             await self._client_session.close()
@@ -68,6 +69,10 @@ class RestHandler:
             _LOGGER.error(f"Error while closing session: {e}")
 
     async def get(self, endpoint: str) -> dict[str, Any]:
+        _LOGGER.debug(
+            f"{inspect.currentframe().f_code.co_name}  {self._base_url}{endpoint}"
+        )
+
         data = await self.get_with_retries(f"{self._base_url}{endpoint}")
         if data:
             return data

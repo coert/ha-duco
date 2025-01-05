@@ -59,6 +59,10 @@ class DucoDeviceUpdateCoordinator(DataUpdateCoordinator[DeviceResponseEntry]):
         LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
 
         try:
+            current_time = asyncio.get_event_loop().time()
+            if current_time - self.api.api_timestamp > 60 * 60:  # 1 hour
+                await self.api.update_key()
+
             calls: list[Coroutine[Any, Any, NodeDataDTO | InfoDTO]] = [
                 self.api.get_node_info(idx) for idx in self._duco_nidxs
             ]
@@ -73,10 +77,12 @@ class DucoDeviceUpdateCoordinator(DataUpdateCoordinator[DeviceResponseEntry]):
                 else:
                     nodes.append(node_result)
 
-            assert info is not None
+            assert info is not None, "InfoDTO not found"
             data = DeviceResponseEntry(info=info, nodes=nodes)
 
         except ApiError as ex:
+            LOGGER.error(f"Error fetching data from Duco API: {ex}")
+
             raise UpdateFailed(
                 ex, translation_domain=DOMAIN, translation_key="communication_error"
             ) from ex

@@ -322,22 +322,23 @@ async def async_setup_entry(
     LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")  # type: ignore
 
     box_data = entry.runtime_data.data.info
-    box_entities: list = [
+    entities: list[DucoEntity] = [
         DucoBoxSensorEntity(entry.runtime_data, description)
         for description in SENSORS_DUCOBOX
         if description.exists_fn(box_data)
     ]
-    async_add_entities(box_entities)
 
     nodes_data = entry.runtime_data.data.nodes
     for node in nodes_data:
         key = node.General.Type
-        node_entities: list = [
+        node_entities: list[DucoEntity] = [
             DucoNodeSensorEntity(entry.runtime_data, description, node)
             for description in SENSORS_ZONES.get(key, ())
             if description.exists_fn(node)
         ]
-        async_add_entities(node_entities)
+        entities.extend(node_entities)
+
+    async_add_entities(entities)
 
 
 class DucoBoxSensorEntity(DucoEntity, SensorEntity):
@@ -361,8 +362,11 @@ class DucoBoxSensorEntity(DucoEntity, SensorEntity):
     @property
     def native_value(self) -> StateType:
         """Return the sensor value."""
+        value = self.entity_description.value_fn(self.coordinator.data.info)
+        LOGGER.debug(f"{self.entity_description.key}={value}")
+
         return (
-            self.entity_description.value_fn(self.coordinator.data.info)
+            value
             if self.entity_description.exists_fn(self.coordinator.data.info)
             else None
         )
@@ -400,11 +404,9 @@ class DucoNodeSensorEntity(DucoEntity, SensorEntity):
     @property
     def native_value(self) -> StateType:
         """Return the sensor value."""
-        return (
-            self.entity_description.value_fn(self.node)
-            if self.entity_description.exists_fn(self.node)
-            else None
-        )
+        value = self.entity_description.value_fn(self.node)
+        LOGGER.debug(f"{self.entity_description.key}={value}")
+        return value if self.entity_description.exists_fn(self.node) else None
 
     @property
     def available(self) -> bool:
