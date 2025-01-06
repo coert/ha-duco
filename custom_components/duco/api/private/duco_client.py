@@ -3,7 +3,6 @@ from __future__ import annotations
 import inspect
 import logging
 import time
-import aiohttp
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -13,9 +12,9 @@ from ...api.DTO.ApiDTO import ApiDetailsDTO
 from ...api.DTO.InfoDTO import GeneralDTO, InfoDTO
 from ...api.DTO.NodeInfoDTO import NodeDataDTO, NodesDataDTO
 from ..utils import remove_val_fields
-from .rest_handler import RestHandler
 from .api_key_generator import ApiKeyGenerator
 from .cert_handler import CustomSSLContext
+from .rest_handler import RestHandler
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 
@@ -115,14 +114,12 @@ class DucoClient:
 
         _LOGGER.debug(f"Connecting to {self.host} without SSL verification")
 
-        self._rest_handler = RestHandler(
-            self.host, self._headers, aiohttp.TCPConnector(verify_ssl=False)
-        )
+        self._rest_handler = RestHandler(self.host, self._headers)
 
-    async def connect(
-        self, ssl_context: CustomSSLContext, api_key: str | None = None
-    ) -> None:
+    async def connect(self, api_key: str | None = None) -> None:
         _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
+
+        # connector = aiohttp.TCPConnector(ssl_context=ssl_context)
 
         if api_key:
             self._headers.update({"Api-Key": api_key})
@@ -136,16 +133,16 @@ class DucoClient:
         self.scheme = "https"
         if self.info_general and self.info_general.Lan.HostName:
             self.netloc = self.info_general.Lan.HostName
+
         self.host = f"{self.scheme}://{self.netloc}.local"
 
-        connector = aiohttp.TCPConnector(ssl=ssl_context)
-        self._rest_handler = RestHandler(self.host, self._headers, connector)
+        self._rest_handler = RestHandler(self.host, self._headers)
 
     async def disconnect(self) -> None:
         _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
 
         if self._rest_handler:
-            await self._rest_handler.close()
+            # await self._rest_handler.close()
             self._rest_handler = None
 
     def get_pem_filepath(self):
@@ -192,36 +189,51 @@ class DucoClient:
         self._api_key = str(key_pair["api_key"])
         self._api_timestamp = float(key_pair["timestamp"])
 
-    async def get_api_info(self) -> ApiDetailsDTO:
+    async def get_api_info(self) -> ApiDetailsDTO | None:
         _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
 
-        api_info_val_dict = await self.rest_handler.get("/api")
-        api_info_dict = remove_val_fields(api_info_val_dict)
-        return from_dict(ApiDetailsDTO, api_info_dict)  # type: ignore
+        try:
+            api_info_val_dict = await self.rest_handler.get("/api")
+            api_info_dict = remove_val_fields(api_info_val_dict)
+            return from_dict(ApiDetailsDTO, api_info_dict)  # type: ignore
 
-    async def get_info(self) -> InfoDTO:
+        except Exception as e:
+            _LOGGER.error(f"Error while getting API info: {e}")
+            return None
+
+    async def get_info(self) -> InfoDTO | None:
+        _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
+        try:
+            info_val_dict = await self.rest_handler.get("/info")
+            info_dict = remove_val_fields(info_val_dict)
+            return from_dict(InfoDTO, info_dict)  # type: ignore
+
+        except Exception as e:
+            _LOGGER.error(f"Error while getting info: {e}")
+            return None
+
+    async def get_nodes(self) -> NodesDataDTO | None:
+        _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
+        try:
+            nodes_val_dict = await self.rest_handler.get("/info/nodes")
+            nodes = [
+                from_dict(NodeDataDTO, remove_val_fields(node_dict))  # type: ignore
+                for node_dict in nodes_val_dict["Nodes"]
+            ]
+            return NodesDataDTO(**{"Nodes": nodes})  # type: ignore
+
+        except Exception as e:
+            _LOGGER.error(f"Error while getting nodes: {e}")
+            return None
+
+    async def get_node_info(self, node_id: int) -> NodeDataDTO | None:
         _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
 
-        info_val_dict = await self.rest_handler.get("/info")
-        info_dict = remove_val_fields(info_val_dict)
-        _LOGGER.debug(f"InfoDTO: {info_dict}")
-        return from_dict(InfoDTO, info_dict)  # type: ignore
+        try:
+            node_info_val_dict = await self.rest_handler.get(f"/info/nodes/{node_id}")
+            node_info_dict = remove_val_fields(node_info_val_dict)
+            return from_dict(NodeDataDTO, node_info_dict)  # type: ignore
 
-    async def get_nodes(self) -> NodesDataDTO:
-        _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
-
-        nodes_val_dict = await self.rest_handler.get("/info/nodes")
-        nodes = [
-            from_dict(NodeDataDTO, remove_val_fields(node_dict))  # type: ignore
-            for node_dict in nodes_val_dict["Nodes"]
-        ]
-        _LOGGER.debug(f"NodesDataDTO: {nodes}")
-        return NodesDataDTO(**{"Nodes": nodes})  # type: ignore
-
-    async def get_node_info(self, node_id: int) -> NodeDataDTO:
-        _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
-
-        node_info_val_dict = await self.rest_handler.get(f"/info/nodes/{node_id}")
-        node_info_dict = remove_val_fields(node_info_val_dict)
-        _LOGGER.debug(f"NodeDataDTO: {node_info_dict}")
-        return from_dict(NodeDataDTO, node_info_dict)  # type: ignore
+        except Exception as e:
+            _LOGGER.error(f"Error while getting nodes: {e}")
+            return None

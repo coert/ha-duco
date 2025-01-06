@@ -1,11 +1,10 @@
 import asyncio
-import aiohttp
 import inspect
 import logging
+import ssl
 from typing import Any
 
 from aiohttp import ClientResponseError, ClientSession, TCPConnector
-from aiohttp.client import ClientTimeout, DEFAULT_TIMEOUT
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 
@@ -16,26 +15,22 @@ class RestHandler:
 
     _retriable_status_codes = {503}
 
+    _ssl_context: ssl.SSLContext | None
+    _connector: TCPConnector | None
     _client_session: ClientSession
 
     def __init__(
         self,
         base_url: str,
         headers: dict[str, str],
+        ssl_context: ssl.SSLContext | None = None,
         connector: TCPConnector | None = None,
-        timeout: ClientTimeout = DEFAULT_TIMEOUT,
     ):
         self._base_url = base_url
         self._headers = headers
+        self._ssl_context = ssl_context
         self._connector = connector
-
-        if connector is None:
-            self._client_session = aiohttp.ClientSession(timeout=timeout)
-
-        else:
-            self._client_session = aiohttp.ClientSession(
-                connector=connector, timeout=timeout
-            )
+        self._client_session = ClientSession()
 
     def __del__(self):
         try:
@@ -131,12 +126,15 @@ class RestHandler:
         Returns:
             Response content or None if all retries fail.
         """
+        _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
         retries = 0
         while retries < self.max_retries:
             try:
                 async with self._client_session.get(
-                    url, headers=self._headers
-                ) as response:
+                    url, headers=self._headers, ssl=False
+                ) as response:  # `ssl=False` skips SSL verification, equivalent to `-k`
+                    _LOGGER.debug(f"Response status: {response.status}")
+
                     if response.status in self._retriable_status_codes:
                         raise ClientResponseError(
                             request_info=response.request_info,

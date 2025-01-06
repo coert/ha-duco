@@ -43,6 +43,7 @@ class DucoClient:
 
         _LOGGER.debug("Initialize Duco API client")
         _LOGGER.debug(f"Public API endpoint: {self._base_url}")
+        _LOGGER.debug(f"Headers: {self._headers}")
 
     async def close(self):
         await self._session.close()

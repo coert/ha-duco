@@ -1,22 +1,20 @@
 """Update coordinator for Duco."""
 
 from __future__ import annotations
-import inspect
-import ssl
-from typing import Any, Coroutine
+
 import asyncio
+import inspect
+from typing import Any, Coroutine
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api.private.duco_client import ApiError, DucoClient
-from .api.private.cert_handler import CustomSSLContext
 from .api.DTO.InfoDTO import InfoDTO
 from .api.DTO.NodeInfoDTO import NodeDataDTO
-
-from .const import LOGGER, DOMAIN, UPDATE_INTERVAL, DeviceResponseEntry
+from .api.private.duco_client import ApiError, DucoClient
+from .const import DOMAIN, LOGGER, UPDATE_INTERVAL, DeviceResponseEntry
 
 
 class DucoDeviceUpdateCoordinator(DataUpdateCoordinator[DeviceResponseEntry]):
@@ -45,13 +43,13 @@ class DucoDeviceUpdateCoordinator(DataUpdateCoordinator[DeviceResponseEntry]):
     async def create_api_connection(self) -> None:
         LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
 
-        ssl_context = CustomSSLContext(hostname=self.api.hostname)
-        ssl_context.verify_mode = ssl.CERT_REQUIRED
-        await self.hass.async_add_executor_job(ssl_context.load_default_certs)
-        await self.hass.async_add_executor_job(
-            ssl_context.load_verify_locations, self.api.get_pem_filepath()
-        )
-        await self.api.connect(ssl_context, self.api_key)
+        # ssl_context = CustomSSLContext(hostname=self.api.hostname)
+        # ssl_context.verify_mode = ssl.CERT_REQUIRED
+        # await self.hass.async_add_executor_job(ssl_context.load_default_certs)
+        # await self.hass.async_add_executor_job(
+        #     ssl_context.load_verify_locations, self.api.get_pem_filepath()
+        # )
+        await self.api.connect(api_key=self.api_key)
         nodes_data = await self.api.get_nodes()
         self._duco_nidxs = {node.id for node in nodes_data.Nodes}
 
@@ -63,7 +61,7 @@ class DucoDeviceUpdateCoordinator(DataUpdateCoordinator[DeviceResponseEntry]):
             if current_time - self.api.api_timestamp > 60 * 60:  # 1 hour
                 await self.api.update_key()
 
-            calls: list[Coroutine[Any, Any, NodeDataDTO | InfoDTO]] = [
+            calls: list[Coroutine[Any, Any, NodeDataDTO | InfoDTO | None]] = [
                 self.api.get_node_info(idx) for idx in self._duco_nidxs
             ]
             calls.append(self.api.get_info())
