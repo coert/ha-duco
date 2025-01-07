@@ -168,3 +168,4 @@ custom_components/duco/certs/certificate.csr
 custom_components/duco/certs/certificate.pem
 custom_components/duco/certs/private.key
 custom_components/duco/certs/v3.ext
+get_values.sh

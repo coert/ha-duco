@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import inspect
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -24,7 +23,6 @@ from homeassistant.components.sensor.const import SensorDeviceClass
 
 from . import DucoConfigEntry
 
-from .const import LOGGER
 from .api.DTO.InfoDTO import InfoDTO
 from .api.DTO.NodeInfoDTO import NodeDataDTO
 from .entity import DucoEntity
@@ -315,17 +313,15 @@ def _proc_press(press: int | None) -> int | None:
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,
+    _: HomeAssistant,
     entry: DucoConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")  # type: ignore
-
-    box_data = entry.runtime_data.data.info
+    box_info = entry.runtime_data.data.info
     entities: list[DucoEntity] = [
         DucoBoxSensorEntity(entry.runtime_data, description)
         for description in SENSORS_DUCOBOX
-        if description.exists_fn(box_data)
+        if box_info and description.exists_fn(box_info)
     ]
 
     nodes_data = entry.runtime_data.data.nodes
@@ -356,18 +352,18 @@ class DucoBoxSensorEntity(DucoEntity, SensorEntity):
 
         self.entity_description = description
         self._attr_unique_id = f"{coordinator.config_entry.unique_id}_{description.key}"
-        if not description.enabled_fn(self.coordinator.data.info):
+        if self.coordinator.data.info is None or not description.enabled_fn(
+            self.coordinator.data.info
+        ):
             self._attr_entity_registry_enabled_default = False
 
     @property
     def native_value(self) -> StateType:
         """Return the sensor value."""
-        value = self.entity_description.value_fn(self.coordinator.data.info)
-        LOGGER.debug(f"{self.entity_description.key}={value}")
-
         return (
-            value
-            if self.entity_description.exists_fn(self.coordinator.data.info)
+            self.entity_description.value_fn(self.coordinator.data.info)
+            if self.coordinator.data.info
+            and self.entity_description.exists_fn(self.coordinator.data.info)
             else None
         )
 
@@ -404,9 +400,11 @@ class DucoNodeSensorEntity(DucoEntity, SensorEntity):
     @property
     def native_value(self) -> StateType:
         """Return the sensor value."""
-        value = self.entity_description.value_fn(self.node)
-        LOGGER.debug(f"{self.entity_description.key}={value}")
-        return value if self.entity_description.exists_fn(self.node) else None
+        return (
+            self.entity_description.value_fn(self.node)
+            if self.entity_description.exists_fn(self.node)
+            else None
+        )
 
     @property
     def available(self) -> bool:

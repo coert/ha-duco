@@ -5,7 +5,9 @@ from __future__ import annotations
 import asyncio
 import inspect
 from typing import Any, Coroutine
+from datetime import timedelta
 
+from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
@@ -14,7 +16,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .api.DTO.InfoDTO import InfoDTO
 from .api.DTO.NodeInfoDTO import NodeDataDTO
 from .api.private.duco_client import ApiError, DucoClient
-from .const import DOMAIN, LOGGER, UPDATE_INTERVAL, DeviceResponseEntry
+from .const import DOMAIN, LOGGER, API_LOCAL_IP, UPDATE_INTERVAL, DeviceResponseEntry
 
 
 class DucoDeviceUpdateCoordinator(DataUpdateCoordinator[DeviceResponseEntry]):
@@ -24,7 +26,7 @@ class DucoDeviceUpdateCoordinator(DataUpdateCoordinator[DeviceResponseEntry]):
     _unsupported_error: bool
     _duco_nidxs: set[int]
 
-    config_entry: ConfigEntry
+    config_entry: ConfigEntry | None
 
     def __init__(
         self,
@@ -32,10 +34,29 @@ class DucoDeviceUpdateCoordinator(DataUpdateCoordinator[DeviceResponseEntry]):
         api_key: str | None = None,
     ) -> None:
         """Initialize update coordinator."""
-        super().__init__(hass, LOGGER, name=DOMAIN, update_interval=UPDATE_INTERVAL)
+        super().__init__(hass, LOGGER, name=DOMAIN)
+
+        host = (
+            self.config_entry.data[CONF_HOST]
+            if self.config_entry and CONF_HOST in self.config_entry.data
+            else API_LOCAL_IP
+        )
+
+        try:
+            self.update_interval = (
+                timedelta(seconds=float(self.config_entry.data["update_interval"]))
+                if self.config_entry and "update_interval" in self.config_entry.data
+                else UPDATE_INTERVAL
+            )
+
+        except ValueError:
+            LOGGER.warning(
+                f"Invalid update interval, falling back to default value: {UPDATE_INTERVAL=}"
+            )
+            self.update_interval = UPDATE_INTERVAL
 
         self.api_key = api_key
-        self.api = DucoClient(self.config_entry.data[CONF_HOST])
+        self.api = DucoClient(host)
 
         self._unsupported_error = False
         self._duco_nidxs = set()
@@ -43,12 +64,6 @@ class DucoDeviceUpdateCoordinator(DataUpdateCoordinator[DeviceResponseEntry]):
     async def create_api_connection(self) -> None:
         LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
 
-        # ssl_context = CustomSSLContext(hostname=self.api.hostname)
-        # ssl_context.verify_mode = ssl.CERT_REQUIRED
-        # await self.hass.async_add_executor_job(ssl_context.load_default_certs)
-        # await self.hass.async_add_executor_job(
-        #     ssl_context.load_verify_locations, self.api.get_pem_filepath()
-        # )
         await self.api.connect(api_key=self.api_key)
         nodes_data = await self.api.get_nodes()
         self._duco_nidxs = {node.id for node in nodes_data.Nodes}
@@ -72,11 +87,18 @@ class DucoDeviceUpdateCoordinator(DataUpdateCoordinator[DeviceResponseEntry]):
             for node_result in duco_results:
                 if isinstance(node_result, InfoDTO):
                     info = node_result
-                else:
+
+                elif isinstance(node_result, NodeDataDTO):
+                    if not (
+                        node_result.Sensor is None or node_result.Sensor.Co2 is None
+                    ):
+                        LOGGER.debug(
+                            f"Node[{node_result.Node}] Co2 data: {node_result.Sensor.Co2}"
+                        )
+
                     nodes.append(node_result)
 
-            assert info is not None, "InfoDTO not found"
-            data = DeviceResponseEntry(info=info, nodes=nodes)
+            self.data = DeviceResponseEntry(info=info, nodes=nodes)
 
         except ApiError as ex:
             LOGGER.error(f"Error fetching data from Duco API: {ex}")
@@ -87,5 +109,4 @@ class DucoDeviceUpdateCoordinator(DataUpdateCoordinator[DeviceResponseEntry]):
 
         self.api_disabled = False
 
-        self.data = data
-        return data
+        return self.data
