@@ -25,4 +25,4 @@ class DeviceResponseEntry:
     """Dict describing a single response entry."""
 
     info: InfoDTO | None
-    nodes: list[NodeDataDTO]
+    nodes: dict[int, NodeDataDTO]

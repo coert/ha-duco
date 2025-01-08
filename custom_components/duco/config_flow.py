@@ -12,7 +12,13 @@ from homeassistant.helpers.selector import TextSelector
 
 from .api.DTO.InfoDTO import InfoDTO
 from .api.private.duco_client import ApiError, DucoClient
-from .const import DOMAIN, LOGGER, MANUFACTURER, API_PRIVATE_URL, UPDATE_INTERVAL
+from .const import (
+    DOMAIN,
+    LOGGER,
+    MANUFACTURER,
+    API_PRIVATE_URL,
+    UPDATE_INTERVAL,
+)
 
 # Define the schema for the user input (API token)
 DATA_SCHEMA = vol.Schema(
@@ -176,7 +182,10 @@ class DucoOptionsFlowHandler(config_entries.OptionsFlow):
             try:
                 self.hass.config_entries.async_update_entry(
                     self.config_entry,
-                    data={"host": host, "update_interval": update_interval},
+                    data={
+                        "host": host,
+                        "update_interval": update_interval,
+                    },
                 )
                 return self.async_create_entry(title="", data={})
 

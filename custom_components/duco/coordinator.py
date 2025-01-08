@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import time
 from typing import Any, Coroutine
 from datetime import timedelta
 
-from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
@@ -16,7 +16,13 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .api.DTO.InfoDTO import InfoDTO
 from .api.DTO.NodeInfoDTO import NodeDataDTO
 from .api.private.duco_client import ApiError, DucoClient
-from .const import DOMAIN, LOGGER, API_LOCAL_IP, UPDATE_INTERVAL, DeviceResponseEntry
+from .const import (
+    DOMAIN,
+    LOGGER,
+    API_LOCAL_IP,
+    UPDATE_INTERVAL,
+    DeviceResponseEntry,
+)
 
 
 class DucoDeviceUpdateCoordinator(DataUpdateCoordinator[DeviceResponseEntry]):
@@ -72,8 +78,14 @@ class DucoDeviceUpdateCoordinator(DataUpdateCoordinator[DeviceResponseEntry]):
         LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
 
         try:
-            current_time = asyncio.get_event_loop().time()
-            if current_time - self.api.api_timestamp > 60 * 60:  # 1 hour
+            loop_time = asyncio.get_event_loop().time()
+            current_time = time.time()
+            LOGGER.debug(f"Loop started: {time.ctime(loop_time)} ({loop_time=})")
+            LOGGER.debug(f"Current time: {time.ctime(current_time)} ({current_time=})")
+            LOGGER.debug(
+                f"API key valid until: {time.ctime(self.api.api_timestamp)} ({self.api.api_timestamp=})"
+            )
+            if current_time > self.api.api_timestamp:
                 await self.api.update_key()
 
             calls: list[Coroutine[Any, Any, NodeDataDTO | InfoDTO | None]] = [
@@ -83,7 +95,7 @@ class DucoDeviceUpdateCoordinator(DataUpdateCoordinator[DeviceResponseEntry]):
             duco_results = await asyncio.gather(*calls)
 
             info: InfoDTO | None = None
-            nodes: list[NodeDataDTO] = []
+            nodes: dict[int, NodeDataDTO] = {}
             for node_result in duco_results:
                 if isinstance(node_result, InfoDTO):
                     info = node_result
@@ -96,7 +108,7 @@ class DucoDeviceUpdateCoordinator(DataUpdateCoordinator[DeviceResponseEntry]):
                             f"Node[{node_result.Node}] Co2 data: {node_result.Sensor.Co2}"
                         )
 
-                    nodes.append(node_result)
+                    nodes[node_result.Node] = node_result
 
             self.data = DeviceResponseEntry(info=info, nodes=nodes)
 

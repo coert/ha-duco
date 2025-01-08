@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -15,6 +16,7 @@ from homeassistant.const import (
     UnitOfPressure,
     UnitOfTime,
     CONCENTRATION_PARTS_PER_MILLION,
+    SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -27,6 +29,7 @@ from .api.DTO.InfoDTO import InfoDTO
 from .api.DTO.NodeInfoDTO import NodeDataDTO
 from .entity import DucoEntity
 from .coordinator import DucoDeviceUpdateCoordinator
+from .const import LOGGER
 
 
 @dataclass(kw_only=True, frozen=True)
@@ -145,6 +148,30 @@ SENSORS_DUCOBOX: tuple[DucoBoxSensorEntityDescription, ...] = (
         and device.Ventilation.Fan is not None
         and device.Ventilation.Fan.PressEha is not None,
     ),
+    DucoBoxSensorEntityDescription(
+        key="time_filter_remain",
+        name="Filter life remaining",
+        icon="mdi:calendar-today",
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.DAYS,
+        value_fn=lambda device: device.HeatRecovery.General.TimeFilterRemain,
+        exists_fn=lambda device: device.HeatRecovery is not None
+        and device.HeatRecovery.General is not None
+        and device.HeatRecovery.General.TimeFilterRemain is not None,
+    ),
+    DucoBoxSensorEntityDescription(
+        key="rssi_wifi",
+        name="Signal strength (WiFi)",
+        icon="mdi:wifi",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        value_fn=lambda device: device.General.Lan.RssiWifi,
+        exists_fn=lambda device: device.General is not None
+        and device.General.Lan is not None
+        and device.General.Lan.RssiWifi is not None,
+    ),
 )
 SENSORS_ZONES: dict[str, tuple[DucoNodeSensorEntityDescription, ...]] = {
     "BOX": (
@@ -172,9 +199,32 @@ SENSORS_ZONES: dict[str, tuple[DucoNodeSensorEntityDescription, ...]] = {
             sensor_key="FlowLvlTgt",
             type="BOX",
             native_unit_of_measurement=PERCENTAGE,
-            value_fn=lambda node: node.Ventilation.FlowLvlTgt,
+            value_fn=lambda node: _proc_pct(node.Ventilation.FlowLvlTgt),
+            suggested_display_precision=2,
             exists_fn=lambda node: node.Ventilation is not None
             and node.Ventilation.FlowLvlTgt is not None,
+        ),
+        DucoNodeSensorEntityDescription(
+            key="flow_lvl_ovrl",
+            name="Flow Level Overrule",
+            sensor_key="FlowLvlOvrl",
+            type="BOX",
+            native_unit_of_measurement=PERCENTAGE,
+            value_fn=lambda node: _proc_pct(node.Ventilation.FlowLvlOvrl),
+            suggested_display_precision=2,
+            exists_fn=lambda node: node.Ventilation is not None
+            and node.Ventilation.FlowLvlOvrl is not None,
+        ),
+        DucoNodeSensorEntityDescription(
+            key="flow_lvl_req_sensor",
+            name="Flow Level Requested",
+            sensor_key="FlowLvlReqSensor",
+            type="BOX",
+            native_unit_of_measurement=PERCENTAGE,
+            value_fn=lambda node: _proc_pct(node.Ventilation.FlowLvlReqSensor),
+            suggested_display_precision=2,
+            exists_fn=lambda node: node.Ventilation is not None
+            and node.Ventilation.FlowLvlReqSensor is not None,
         ),
         DucoNodeSensorEntityDescription(
             key="time_state_remain",
@@ -297,6 +347,79 @@ SENSORS_ZONES: dict[str, tuple[DucoNodeSensorEntityDescription, ...]] = {
             and node.Sensor.IaqRh is not None,
         ),
     ),
+    "UCBAT": (
+        DucoNodeSensorEntityDescription(
+            key="mode",
+            name="Ventilation Mode",
+            sensor_key="Mode",
+            type="UCBAT",
+            value_fn=lambda node: node.Ventilation.Mode,
+            exists_fn=lambda node: node.Ventilation is not None
+            and node.Ventilation.Mode is not None,
+        ),
+        DucoNodeSensorEntityDescription(
+            key="state",
+            name="Ventilation State",
+            sensor_key="State",
+            type="UCBAT",
+            value_fn=lambda node: node.Ventilation.State,
+            exists_fn=lambda node: node.Ventilation is not None
+            and node.Ventilation.State is not None,
+        ),
+        DucoNodeSensorEntityDescription(
+            key="flow_lvl_tgt",
+            name="Flow Level Target",
+            sensor_key="FlowLvlTgt",
+            type="UCBAT",
+            native_unit_of_measurement=PERCENTAGE,
+            value_fn=lambda node: _proc_pct(node.Ventilation.FlowLvlTgt),
+            suggested_display_precision=2,
+            exists_fn=lambda node: node.Ventilation is not None
+            and node.Ventilation.FlowLvlTgt is not None,
+        ),
+        DucoNodeSensorEntityDescription(
+            key="flow_lvl_ovrl",
+            name="Flow Level Overrule",
+            sensor_key="FlowLvlOvrl",
+            type="UCBAT",
+            native_unit_of_measurement=PERCENTAGE,
+            value_fn=lambda node: _proc_pct(node.Ventilation.FlowLvlOvrl),
+            suggested_display_precision=2,
+            exists_fn=lambda node: node.Ventilation is not None
+            and node.Ventilation.FlowLvlOvrl is not None,
+        ),
+        DucoNodeSensorEntityDescription(
+            key="flow_lvl_req_sensor",
+            name="Flow Level Requested",
+            sensor_key="FlowLvlReqSensor",
+            type="UCBAT",
+            native_unit_of_measurement=PERCENTAGE,
+            value_fn=lambda node: _proc_pct(node.Ventilation.FlowLvlReqSensor),
+            suggested_display_precision=2,
+            exists_fn=lambda node: node.Ventilation is not None
+            and node.Ventilation.FlowLvlReqSensor is not None,
+        ),
+        DucoNodeSensorEntityDescription(
+            key="time_state_remain",
+            name="Time State Remaining",
+            sensor_key="TimeStateRemain",
+            type="UCBAT",
+            native_unit_of_measurement=UnitOfTime.SECONDS,
+            value_fn=lambda node: node.Ventilation.TimeStateRemain,
+            exists_fn=lambda node: node.Ventilation is not None
+            and node.Ventilation.TimeStateRemain is not None,
+        ),
+        DucoNodeSensorEntityDescription(
+            key="time_state_end",
+            name="Time State Ending",
+            sensor_key="TimeStateEnd",
+            type="UCBAT",
+            native_unit_of_measurement=UnitOfTime.SECONDS,
+            value_fn=lambda node: node.Ventilation.TimeStateEnd,
+            exists_fn=lambda node: node.Ventilation is not None
+            and node.Ventilation.TimeStateEnd is not None,
+        ),
+    ),
 }
 
 
@@ -312,6 +435,10 @@ def _proc_press(press: int | None) -> int | None:
     return press if press is not None else None
 
 
+def _proc_pct(pct: int | None) -> float | None:
+    return (pct / 255) * 100 if pct is not None else None
+
+
 async def async_setup_entry(
     _: HomeAssistant,
     entry: DucoConfigEntry,
@@ -325,7 +452,7 @@ async def async_setup_entry(
     ]
 
     nodes_data = entry.runtime_data.data.nodes
-    for node in nodes_data:
+    for node in nodes_data.values():
         key = node.General.Type
         node_entities: list[DucoEntity] = [
             DucoNodeSensorEntity(entry.runtime_data, description, node)
@@ -345,14 +472,16 @@ class DucoBoxSensorEntity(DucoEntity, SensorEntity):
     def __init__(
         self,
         coordinator: DucoDeviceUpdateCoordinator,
-        description: DucoBoxSensorEntityDescription,
+        entity_description: DucoBoxSensorEntityDescription,
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
 
-        self.entity_description = description
-        self._attr_unique_id = f"{coordinator.config_entry.unique_id}_{description.key}"
-        if self.coordinator.data.info is None or not description.enabled_fn(
+        self.entity_description = entity_description
+        self._attr_unique_id = (
+            f"{coordinator.config_entry.unique_id}_{entity_description.key}"
+        )
+        if self.coordinator.data.info is None or not entity_description.enabled_fn(
             self.coordinator.data.info
         ):
             self._attr_entity_registry_enabled_default = False
@@ -392,7 +521,7 @@ class DucoNodeSensorEntity(DucoEntity, SensorEntity):
         self.node = node
 
         self._attr_unique_id = (
-            f"{coordinator.config_entry.unique_id}_{description.key}_{node.Node}"
+            f"{coordinator.config_entry.unique_id}_{description.key}_{self.node.Node}"
         )
         if not description.enabled_fn(node):
             self._attr_entity_registry_enabled_default = False
@@ -400,11 +529,23 @@ class DucoNodeSensorEntity(DucoEntity, SensorEntity):
     @property
     def native_value(self) -> StateType:
         """Return the sensor value."""
-        return (
+        assert (
+            self.node.Node in self.coordinator.data.nodes
+        ), f"Node {self.node.Node} not found"
+
+        self.node = self.coordinator.data.nodes[self.node.Node]
+        value = (
             self.entity_description.value_fn(self.node)
             if self.entity_description.exists_fn(self.node)
             else None
         )
+
+        if value is None:
+            LOGGER.warning(
+                f"Sensor {self.entity_description.name} has no value. Node: {self.node.Node}"
+            )
+
+        return value
 
     @property
     def available(self) -> bool:

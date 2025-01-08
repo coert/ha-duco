@@ -119,12 +119,10 @@ class DucoClient:
     async def connect(self, api_key: str | None = None) -> None:
         _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
 
-        # connector = aiohttp.TCPConnector(ssl_context=ssl_context)
-
         if api_key:
             self._headers.update({"Api-Key": api_key})
             self._api_key = api_key
-            self._api_timestamp = time.time()
+            self._api_timestamp = time.time() + 3600
 
         else:
             await self.update_key()
@@ -153,7 +151,7 @@ class DucoClient:
         _LOGGER.debug(f"Loading pem file from {pem_filepath.name}")
         return pem_filepath
 
-    async def create_api_key(self, info_general: GeneralDTO) -> dict[str, str | float]:
+    async def _create_api_key(self, info_general: GeneralDTO):
         _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
 
         duco_mac = info_general.Lan.Mac
@@ -162,32 +160,28 @@ class DucoClient:
         assert duco_mac and duco_serial and duco_time, "Invalid data"
 
         api_key_generator = ApiKeyGenerator()
-        key = {
-            "api_key": api_key_generator.generate_api_key(
-                duco_serial, duco_mac, duco_time
-            ),
-            "timestamp": time.time(),
-        }
+        self._api_key = api_key_generator.generate_api_key(
+            duco_serial, duco_mac, duco_time
+        )
+        self._api_timestamp = float(duco_time)
+        self._headers.update({"Api-Key": self._api_key})
 
-        _LOGGER.debug(f"API key created at {time.ctime(key["timestamp"])}")
-        return key
+        if info_general.Board.UpTime:
+            up_since = time.time() - info_general.Board.UpTime * 60
+            _LOGGER.debug(f"DucoBox up since: {time.ctime(up_since)}")
+
+        _LOGGER.debug(f"API key valid until: {time.ctime(self._api_timestamp)}")
 
     async def update_key(self) -> None:
         _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
 
-        if self._info_general:
-            self._info_general.Board.Time = int(time.time())  # update time
-            key_pair = await self.create_api_key(self._info_general)
-
-        else:
+        if not self._info_general:
             await self.connect_insecure()
             info = await self.get_info()
+            assert info, "Info not found"
             self._info_general = info.General
-            key_pair = await self.create_api_key(self._info_general)
 
-        self._headers.update({"Api-Key": str(key_pair["api_key"])})
-        self._api_key = str(key_pair["api_key"])
-        self._api_timestamp = float(key_pair["timestamp"])
+        await self._create_api_key(self._info_general)
 
     async def get_api_info(self) -> ApiDetailsDTO | None:
         _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
@@ -206,7 +200,9 @@ class DucoClient:
         try:
             info_val_dict = await self.rest_handler.get("/info")
             info_dict = remove_val_fields(info_val_dict)
-            return from_dict(InfoDTO, info_dict)  # type: ignore
+            info = from_dict(InfoDTO, info_dict)  # type: ignore
+            self._info_general = info.General
+            return info
 
         except Exception as e:
             _LOGGER.error(f"Error while getting info: {e}")
