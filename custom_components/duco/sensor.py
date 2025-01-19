@@ -490,10 +490,10 @@ class DucoBoxSensorEntity(DucoEntity, SensorEntity):
 
         try:
             value = (self.entity_description.value_fn(self.coordinator.data.info)
-                     if self.coordinator.data.info 
+                     if self.coordinator.data.info
                      and self.entity_description.exists_fn(self.coordinator.data.info)
                      else None)
-        
+
         except Exception as e:
             LOGGER.error(
                 f"Error while processing sensor {self.entity_description.name}: {e}"
@@ -505,7 +505,7 @@ class DucoBoxSensorEntity(DucoEntity, SensorEntity):
             )
 
         return value
-        
+
     @property
     def available(self) -> bool:
         """Return availability of meter."""
@@ -539,20 +539,16 @@ class DucoNodeSensorEntity(DucoEntity, SensorEntity):
     @property
     def native_value(self) -> StateType:
         """Return the sensor value."""
-        assert self.node.Node in self.coordinator.data.nodes, (
-            f"Node {self.node.Node} not found"
-        )
-
         value = None
 
         try:
-            self.node = self.coordinator.data.nodes[self.node.Node]
-            
-            value = (
-                self.entity_description.value_fn(self.node)
-                if self.entity_description.exists_fn(self.node)
-                else None
-            )
+            if self.node.Node in self.coordinator.data.nodes:
+                self.node = self.coordinator.data.nodes[self.node.Node]
+                value = (
+                    self.entity_description.value_fn(self.node)
+                    if self.entity_description.exists_fn(self.node)
+                    else None
+                )
 
         except Exception as e:
             LOGGER.error(
