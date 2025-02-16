@@ -2,13 +2,13 @@ from typing import Any, Optional
 import inspect
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.components.zeroconf import ZeroconfServiceInfo
 from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.core import callback
 from homeassistant.const import CONF_HOST
 from homeassistant.data_entry_flow import AbortFlow
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.selector import TextSelector
+from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from .api.DTO.InfoDTO import InfoDTO
 from .api.private.duco_client import ApiError, DucoClient
