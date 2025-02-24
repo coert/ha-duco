@@ -1,15 +1,15 @@
 [project]
 dependencies = [
     "aiohttp>=3.11.11",
- "dacite>=1.8.1",
- "homeassistant>=2025.2.5",
- "orjson>=3.10.12",
+    "dacite>=1.8.1",
+    "homeassistant>=2025.2.5",
+    "orjson>=3.10.12",
 ]
 description = "Add your description here"
 name = "my-ha-duco"
 readme = "README.md"
 requires-python = ">=3.13"
-version = "0.1.0"
+version = "2.2.0"
 
 [dependency-groups]
 dev = [
@@ -32,7 +32,7 @@ description = ""
 name = "my-ha-duco"
 packages = [{ include = "my_ha_duco" }]
 readme = "README.md"
-version = "0.1.0"
+version = "2.2.0"
 
 [tool.poetry.dependencies]
 python = "^3.13"
