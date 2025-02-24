@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import inspect
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -27,6 +29,9 @@ from .api.DTO.NodeInfoDTO import NodeDataDTO
 from .const import LOGGER
 from .coordinator import DucoDeviceUpdateCoordinator
 from .entity import DucoEntity
+
+
+_LOGGER: logging.Logger = logging.getLogger(__package__)
 
 
 @dataclass(kw_only=True, frozen=True)
@@ -441,6 +446,8 @@ async def async_setup_entry(
     entry: DucoConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
+    _LOGGER.debug(f"sensor:{inspect.currentframe().f_code.co_name}")
+
     box_info = entry.runtime_data.data.info
     entities: list[DucoEntity] = [
         DucoBoxSensorEntity(entry.runtime_data, description)
@@ -489,10 +496,12 @@ class DucoBoxSensorEntity(DucoEntity, SensorEntity):
         value = None
 
         try:
-            value = (self.entity_description.value_fn(self.coordinator.data.info)
-                     if self.coordinator.data.info
-                     and self.entity_description.exists_fn(self.coordinator.data.info)
-                     else None)
+            value = (
+                self.entity_description.value_fn(self.coordinator.data.info)
+                if self.coordinator.data.info
+                and self.entity_description.exists_fn(self.coordinator.data.info)
+                else None
+            )
 
         except Exception as e:
             LOGGER.error(

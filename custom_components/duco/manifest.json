@@ -1,10 +1,11 @@
 {
   "domain": "duco",
   "name": "Duco",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "documentation": "https://github.com/coert/ha-duco",
   "dependencies": [
-    "sensor"
+    "sensor",
+    "button"
   ],
   "codeowners": [
     "@coert"

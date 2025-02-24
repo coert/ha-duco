@@ -3,7 +3,6 @@ from __future__ import annotations
 import inspect
 import logging
 import time
-import orjson
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -13,7 +12,7 @@ from dataclasses import asdict
 from ...api.DTO.ApiDTO import ApiDetailsDTO
 from ...api.DTO.InfoDTO import GeneralDTO, InfoDTO
 from ...api.DTO.NodeInfoDTO import NodeDataDTO, NodesDataDTO
-from ...api.DTO.ActionDTO import ActionEnum, NodeActionPostDTO as ActionDTO
+from ...api.DTO.ActionDTO import ActionEnum, NodeActionPostDTO
 from ...api.DTO.NodeActionDTO import NodeActionsDTO
 from ..utils import remove_val_fields
 from .api_key_generator import ApiKeyGenerator
@@ -243,25 +242,10 @@ class DucoClient:
             _LOGGER.error(f"Error while getting nodes: {e}")
             return None
 
-    async def get_supported_actions(self) -> ActionDTO | None:
-        _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
-
-        try:
-            supported_actions = await self.rest_handler.get("/action")
-            _LOGGER.debug(
-                orjson.dumps(supported_actions, option=orjson.OPT_INDENT_2).decode()
-            )
-            return None
-
-        except Exception as e:
-            _LOGGER.error(f"Error while getting supported actions: {e}")
-            return None
-
     async def get_node_supported_actions(self, node_id: int) -> NodeActionsDTO | None:
         _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
 
         try:
-            await self.connect_insecure()
             supported_actions = await self.rest_handler.get(f"/action/nodes/{node_id}")
             return from_dict(NodeActionsDTO, supported_actions)  # type: ignore
 
@@ -270,7 +254,6 @@ class DucoClient:
             return None
 
     async def supports_update_ventilation_action(self, node_id: int) -> bool:
-        await self.connect_insecure()
         if supported_actions := await self.get_node_supported_actions(node_id):
             for action in supported_actions.Actions:
                 if action.Action == "SetVentilationState":
@@ -280,7 +263,7 @@ class DucoClient:
 
     async def set_ventilation_action(self, node_id: int, action: ActionEnum) -> None:
         try:
-            actions = ActionDTO(Action="SetVentilationState", Val=action.value)
+            actions = NodeActionPostDTO(Action="SetVentilationState", Val=action.value)
             await self.rest_handler.post(f"/action/nodes/{node_id}", asdict(actions))
             _LOGGER.debug(f"Set action {action} for node {node_id}")
 

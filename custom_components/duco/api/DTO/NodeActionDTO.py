@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from .ActionDTO import NodeActionPostDTO as ActionDTO
+from .ActionDTO import NodeActionDTO as ActionDTO
 
 
 @dataclass

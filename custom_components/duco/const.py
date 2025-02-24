@@ -4,6 +4,8 @@ import logging
 from dataclasses import dataclass, field
 from datetime import timedelta
 
+from homeassistant.const import Platform
+
 from .api.DTO.InfoDTO import InfoDTO
 from .api.DTO.NodeInfoDTO import NodeDataDTO
 from .api.DTO.ActionDTO import NodeActionDTO as ActionDTO
@@ -11,7 +13,7 @@ from .api.DTO.NodeActionDTO import NodeActionsDTO
 
 DOMAIN = "duco"
 MANUFACTURER = "Duco"
-PLATFORMS = ["sensor"]
+PLATFORMS = [Platform.SENSOR, Platform.BUTTON]
 API_LOCAL_IP = "192.168.5.4"
 API_PRIVATE_URL = f"https://{API_LOCAL_IP}"
 API_PUBLIC_URL = "https://vd-dev-weu-apim.azure-api.net/publicapi"
