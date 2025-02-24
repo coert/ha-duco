@@ -3,6 +3,7 @@ import inspect
 import logging
 import ssl
 from typing import Any
+import orjson
 
 from aiohttp import ClientResponseError, ClientSession, TCPConnector
 
@@ -74,19 +75,24 @@ class RestHandler:
 
         return {}
 
-    async def post(self, endpoint: str):
-        async with self._client_session.post(
-            f"{self._base_url}{endpoint}",
-            headers=self._headers,
-        ) as response:
-            response.raise_for_status()
-            data = await response.json()
-            return data
+    async def post(self, endpoint: str, data: dict[str, Any]) -> dict[str, Any]:
+        _LOGGER.debug(
+            f"{inspect.currentframe().f_code.co_name}  {self._base_url}{endpoint}"
+        )
+
+        response_data = await self.post_with_retries(
+            f"{self._base_url}{endpoint}", data
+        )
+        if response_data:
+            return response_data
+
+        return {}
 
     async def patch(self, endpoint: str):
         async with self._client_session.patch(
             f"{self._base_url}{endpoint}",
             headers=self._headers,
+            ssl=False,
         ) as response:
             response.raise_for_status()
             data = await response.json()
@@ -96,6 +102,7 @@ class RestHandler:
         async with self._client_session.delete(
             f"{self._base_url}{endpoint}",
             headers=self._headers,
+            ssl=False,
         ) as response:
             response.raise_for_status()
             data = await response.json()
@@ -105,10 +112,56 @@ class RestHandler:
         async with self._client_session.head(
             f"{self._base_url}{endpoint}",
             headers=self._headers,
+            ssl=False,
         ) as response:
             response.raise_for_status()
             data = await response.json()
             return data
+
+    async def post_with_retries(
+        self,
+        url: str,
+        data: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
+
+        retries = 0
+        while retries < self.max_retries:
+            try:
+                data_str = orjson.dumps(data).decode("utf-8")
+                headers = {"Content-Type": "application/json"}
+                async with self._client_session.post(
+                    url, headers=headers, ssl=False, data=data_str
+                ) as response:
+                    _LOGGER.debug(f"Response status: {response.status}")
+
+                    if response.status in self._retriable_status_codes:
+                        raise ClientResponseError(
+                            request_info=response.request_info,
+                            history=response.history,
+                            status=response.status,
+                            message="Service Unavailable",
+                        )
+
+                    else:
+                        response.raise_for_status()
+
+                    return await response.json()
+
+            except ClientResponseError as e:
+                if e.status in self._retriable_status_codes:
+                    retries += 1
+                    delay = self.base_delay * (2 ** (retries - 1))
+                    _LOGGER.warning(
+                        f"Retry {retries}/{self.max_retries}: Waiting {delay:.2f} seconds ({e.status} received)"
+                    )
+                    await asyncio.sleep(delay)
+
+                else:
+                    raise  # Reraise for other HTTP errors
+
+        _LOGGER.warning(f"Failed to post {url} after {self.max_retries} retries.")
+        return None
 
     async def get_with_retries(
         self,

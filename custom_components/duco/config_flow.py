@@ -191,7 +191,7 @@ class DucoOptionsFlowHandler(config_entries.OptionsFlow):
 
             except ApiError:
                 # Handle general API error
-                LOGGER.info("Failed to fetch devices from Eplucon API")
+                LOGGER.info("Failed to fetch devices from Duco API")
                 errors["base"] = "api"
 
             except Exception as e:

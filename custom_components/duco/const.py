@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 
 from .api.DTO.InfoDTO import InfoDTO
 from .api.DTO.NodeInfoDTO import NodeDataDTO
+from .api.DTO.ActionDTO import NodeActionDTO as ActionDTO
+from .api.DTO.NodeActionDTO import NodeActionsDTO
 
 DOMAIN = "duco"
 MANUFACTURER = "Duco"
@@ -24,5 +26,7 @@ UPDATE_INTERVAL = timedelta(seconds=180)
 class DeviceResponseEntry:
     """Dict describing a single response entry."""
 
-    info: InfoDTO | None
-    nodes: dict[int, NodeDataDTO]
+    info: InfoDTO | None = None
+    nodes: dict[int, NodeDataDTO] = field(default_factory=dict)
+    actions: ActionDTO | None = None
+    node_actions: dict[int, NodeActionsDTO] = field(default_factory=dict)

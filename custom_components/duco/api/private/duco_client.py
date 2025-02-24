@@ -3,18 +3,23 @@ from __future__ import annotations
 import inspect
 import logging
 import time
+import orjson
 from pathlib import Path
 from urllib.parse import urlparse
 
 from dacite import from_dict
+from dataclasses import asdict
 
 from ...api.DTO.ApiDTO import ApiDetailsDTO
 from ...api.DTO.InfoDTO import GeneralDTO, InfoDTO
 from ...api.DTO.NodeInfoDTO import NodeDataDTO, NodesDataDTO
+from ...api.DTO.ActionDTO import ActionEnum, NodeActionPostDTO as ActionDTO
+from ...api.DTO.NodeActionDTO import NodeActionsDTO
 from ..utils import remove_val_fields
 from .api_key_generator import ApiKeyGenerator
 from .cert_handler import CustomSSLContext
 from .rest_handler import RestHandler
+from ...const import API_LOCAL_IP
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 
@@ -110,6 +115,7 @@ class DucoClient:
         await self.disconnect()
 
         self.scheme = "http"
+        self.netloc = API_LOCAL_IP
         self.host = f"{self.scheme}://{self.netloc}"
 
         _LOGGER.debug(f"Connecting to {self.host} without SSL verification")
@@ -163,6 +169,7 @@ class DucoClient:
         self._api_key = api_key_generator.generate_api_key(
             duco_serial, duco_mac, duco_time
         )
+
         self._api_timestamp = float(duco_time)
         self._headers.update({"Api-Key": self._api_key})
 
@@ -170,7 +177,9 @@ class DucoClient:
             up_since = time.time() - info_general.Board.UpTime * 60
             _LOGGER.debug(f"DucoBox up since: {time.ctime(up_since)}")
 
-        _LOGGER.debug(f"API key valid until: {time.ctime(self._api_timestamp)}")
+        _LOGGER.debug(
+            f"API key ({self._api_key}) valid until: {time.ctime(self._api_timestamp)}"
+        )
 
     async def update_key(self) -> None:
         _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
@@ -233,3 +242,47 @@ class DucoClient:
         except Exception as e:
             _LOGGER.error(f"Error while getting nodes: {e}")
             return None
+
+    async def get_supported_actions(self) -> ActionDTO | None:
+        _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
+
+        try:
+            supported_actions = await self.rest_handler.get("/action")
+            _LOGGER.debug(
+                orjson.dumps(supported_actions, option=orjson.OPT_INDENT_2).decode()
+            )
+            return None
+
+        except Exception as e:
+            _LOGGER.error(f"Error while getting supported actions: {e}")
+            return None
+
+    async def get_node_supported_actions(self, node_id: int) -> NodeActionsDTO | None:
+        _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
+
+        try:
+            await self.connect_insecure()
+            supported_actions = await self.rest_handler.get(f"/action/nodes/{node_id}")
+            return from_dict(NodeActionsDTO, supported_actions)  # type: ignore
+
+        except Exception as e:
+            _LOGGER.error(f"Error while getting supported actions: {e}")
+            return None
+
+    async def supports_update_ventilation_action(self, node_id: int) -> bool:
+        await self.connect_insecure()
+        if supported_actions := await self.get_node_supported_actions(node_id):
+            for action in supported_actions.Actions:
+                if action.Action == "SetVentilationState":
+                    return True
+
+        return False
+
+    async def set_ventilation_action(self, node_id: int, action: ActionEnum) -> None:
+        try:
+            actions = ActionDTO(Action="SetVentilationState", Val=action.value)
+            await self.rest_handler.post(f"/action/nodes/{node_id}", asdict(actions))
+            _LOGGER.debug(f"Set action {action} for node {node_id}")
+
+        except Exception as e:
+            _LOGGER.error(f"Error while setting action: {e}")

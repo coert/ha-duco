@@ -67,6 +67,10 @@ class DucoDeviceUpdateCoordinator(DataUpdateCoordinator[DeviceResponseEntry]):
         self._unsupported_error = False
         self._duco_nidxs = set()
 
+    @property
+    def duco_nidxs(self) -> set[int]:
+        return self._duco_nidxs
+
     async def create_api_connection(self) -> None:
         LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
 
@@ -130,3 +134,7 @@ class DucoDeviceUpdateCoordinator(DataUpdateCoordinator[DeviceResponseEntry]):
         self.api_disabled = False
 
         return self.data
+
+    async def supports_update_ventilation_action(self, node_id: int) -> bool:
+        """Return if the device supports updating the ventilation state."""
+        return await self.api.supports_update_ventilation_action(node_id)
