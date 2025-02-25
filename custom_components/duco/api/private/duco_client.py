@@ -18,7 +18,6 @@ from ..utils import remove_val_fields
 from .api_key_generator import ApiKeyGenerator
 from .cert_handler import CustomSSLContext
 from .rest_handler import RestHandler
-from ...const import API_LOCAL_IP
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 
@@ -114,8 +113,9 @@ class DucoClient:
         await self.disconnect()
 
         self.scheme = "http"
-        self.netloc = API_LOCAL_IP
-        self.host = f"{self.scheme}://{self.netloc}"
+        if self.info_general and self.info_general.Lan.HostName:
+            self.netloc = self.info_general.Lan.HostName
+        self.host = f"{self.scheme}://{self.netloc}.local"
 
         _LOGGER.debug(f"Connecting to {self.host} without SSL verification")
 
@@ -253,19 +253,13 @@ class DucoClient:
             _LOGGER.error(f"Error while getting supported actions: {e}")
             return None
 
-    async def supports_update_ventilation_action(self, node_id: int) -> bool:
-        if supported_actions := await self.get_node_supported_actions(node_id):
-            for action in supported_actions.Actions:
-                if action.Action == "SetVentilationState":
-                    return True
-
-        return False
-
-    async def set_ventilation_action(self, node_id: int, action: ActionEnum) -> None:
+    async def set_node_action_state(
+        self, node_id: int, action: str, state: ActionEnum
+    ) -> None:
         try:
-            actions = NodeActionPostDTO(Action="SetVentilationState", Val=action.value)
-            await self.rest_handler.post(f"/action/nodes/{node_id}", asdict(actions))
-            _LOGGER.debug(f"Set action {action} for node {node_id}")
+            actions = asdict(NodeActionPostDTO(Action=action, Val=state.value))
+            await self.rest_handler.post(f"/action/nodes/{node_id}", actions)
+            _LOGGER.debug(f"Set action {state} for node {node_id}")
 
         except Exception as e:
             _LOGGER.error(f"Error while setting action: {e}")

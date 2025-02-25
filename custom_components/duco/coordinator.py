@@ -15,6 +15,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .api.DTO.InfoDTO import InfoDTO
 from .api.DTO.NodeInfoDTO import NodeDataDTO
+from .api.DTO.NodeActionDTO import NodeActionsDTO
 from .api.private.duco_client import ApiError, DucoClient
 from .const import (
     DOMAIN,
@@ -100,14 +101,18 @@ class DucoDeviceUpdateCoordinator(DataUpdateCoordinator[DeviceResponseEntry]):
             if current_time > self.api.api_timestamp:
                 await self.api.update_key()
 
-            calls: list[Coroutine[Any, Any, NodeDataDTO | InfoDTO | None]] = [
-                self.api.get_node_info(idx) for idx in self._duco_nidxs
-            ]
+            calls: list[
+                Coroutine[Any, Any, NodeDataDTO | InfoDTO | NodeActionsDTO | None]
+            ] = [self.api.get_node_info(idx) for idx in self.duco_nidxs]
             calls.append(self.api.get_info())
+            calls.extend(
+                [self.api.get_node_supported_actions(idx) for idx in self.duco_nidxs]
+            )
             duco_results = await asyncio.gather(*calls)
 
             info: InfoDTO | None = None
             nodes: dict[int, NodeDataDTO] = {}
+            node_actions: dict[int, NodeActionsDTO] = {}
             for node_result in duco_results:
                 if isinstance(node_result, InfoDTO):
                     info = node_result
@@ -116,13 +121,18 @@ class DucoDeviceUpdateCoordinator(DataUpdateCoordinator[DeviceResponseEntry]):
                     if not (
                         node_result.Sensor is None or node_result.Sensor.Co2 is None
                     ):
-                        LOGGER.debug(
+                        LOGGER.warning(
                             f"Node[{node_result.Node}] Co2 data: {node_result.Sensor.Co2}"
                         )
 
                     nodes[node_result.Node] = node_result
 
-            self.data = DeviceResponseEntry(info=info, nodes=nodes)
+                elif isinstance(node_result, NodeActionsDTO):
+                    node_actions[node_result.Node] = node_result
+
+            self.data = DeviceResponseEntry(
+                info=info, nodes=nodes, node_actions=node_actions
+            )
 
         except ApiError as ex:
             LOGGER.error(f"Error fetching data from Duco API: {ex}")
@@ -134,7 +144,3 @@ class DucoDeviceUpdateCoordinator(DataUpdateCoordinator[DeviceResponseEntry]):
         self.api_disabled = False
 
         return self.data
-
-    async def supports_update_ventilation_action(self, node_id: int) -> bool:
-        """Return if the device supports updating the ventilation state."""
-        return await self.api.supports_update_ventilation_action(node_id)

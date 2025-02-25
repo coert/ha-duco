@@ -1,24 +1,105 @@
+from __future__ import annotations
+
 import asyncio
 import inspect
 import logging
 from typing import Any, Coroutine
+from dataclasses import dataclass
+from collections.abc import Awaitable, Callable
 
-from homeassistant.components.button import ButtonDeviceClass, ButtonEntity
-from homeassistant.const import EntityCategory
+from homeassistant.components.button import (
+    ButtonDeviceClass,
+    ButtonEntity,
+    ButtonEntityDescription,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import DucoConfigEntry
+from .api.private.duco_client import DucoClient
 from .api.DTO.NodeInfoDTO import NodeDataDTO
 from .api.DTO.ActionDTO import ActionEnum
+from .const import DeviceResponseEntry
 from .coordinator import DucoDeviceUpdateCoordinator
 from .entity import DucoEntity
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 
 
+@dataclass(frozen=True, kw_only=True)
+class DucoButtonEntityDescription(ButtonEntityDescription):
+    """Class describing Duco button entities."""
+
+    available_fn: Callable[[DeviceResponseEntry, int, str], bool]
+    set_fn: Callable[[DucoClient, int, str], Awaitable[None]]
+
+
+BUTTONS = [
+    DucoButtonEntityDescription(
+        key="set_vent_state_auto",
+        name=None,
+        device_class=ButtonDeviceClass.UPDATE,
+        available_fn=lambda x, nidx, node_action: nidx in x.node_actions
+        and any(
+            action_enum == ActionEnum.AUTO.value
+            for action in x.node_actions[nidx].Actions
+            if action.Action == node_action and action.Enum is not None
+            for action_enum in action.Enum
+        ),
+        set_fn=lambda api, nidx, node_action: api.set_node_action_state(
+            nidx, node_action, ActionEnum.AUTO
+        ),
+    ),
+    DucoButtonEntityDescription(
+        key="set_vent_state_man1",
+        name=None,
+        device_class=ButtonDeviceClass.UPDATE,
+        available_fn=lambda x, nidx, node_action: nidx in x.node_actions
+        and any(
+            action_enum == ActionEnum.MAN1.value
+            for action in x.node_actions[nidx].Actions
+            if action.Action == node_action and action.Enum is not None
+            for action_enum in action.Enum
+        ),
+        set_fn=lambda api, nidx, node_action: api.set_node_action_state(
+            nidx, node_action, ActionEnum.MAN1
+        ),
+    ),
+    DucoButtonEntityDescription(
+        key="set_vent_state_man2",
+        name=None,
+        device_class=ButtonDeviceClass.UPDATE,
+        available_fn=lambda x, nidx, node_action: nidx in x.node_actions
+        and any(
+            action_enum == ActionEnum.MAN2.value
+            for action in x.node_actions[nidx].Actions
+            if action.Action == node_action and action.Enum is not None
+            for action_enum in action.Enum
+        ),
+        set_fn=lambda api, nidx, node_action: api.set_node_action_state(
+            nidx, node_action, ActionEnum.MAN2
+        ),
+    ),
+    DucoButtonEntityDescription(
+        key="set_vent_state_man3",
+        name=None,
+        device_class=ButtonDeviceClass.UPDATE,
+        available_fn=lambda x, nidx, node_action: nidx in x.node_actions
+        and any(
+            action_enum == ActionEnum.MAN3.value
+            for action in x.node_actions[nidx].Actions
+            if action.Action == node_action and action.Enum is not None
+            for action_enum in action.Enum
+        ),
+        set_fn=lambda api, nidx, node_action: api.set_node_action_state(
+            nidx, node_action, ActionEnum.MAN3
+        ),
+    ),
+]
+
+
 async def async_setup_entry(
-    hass: HomeAssistant,
+    _: HomeAssistant,
     entry: DucoConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
@@ -30,68 +111,46 @@ async def async_setup_entry(
         calls_nodes.append(entry.runtime_data.api.get_node_info(node_id))
     node_results = await asyncio.gather(*calls_nodes)
 
-    calls: list[Coroutine[Any, Any, bool]] = []
-    for node_id in entry.runtime_data.duco_nidxs:
-        calls.append(entry.runtime_data.supports_update_ventilation_action(node_id))
+    add_entities: list[DucoVentActionButtonEntity] = [
+        DucoVentActionButtonEntity(entry.runtime_data, node, button)
+        for node in node_results
+        if node is not None
+        for button in BUTTONS
+    ]
 
-    results = await asyncio.gather(*calls)
-
-    button_entities = []
-    for node_id, supports_update in zip(entry.runtime_data.duco_nidxs, results):
-        node = next(
-            (
-                node
-                for node in node_results
-                if node is not None and node.Node == node_id
-            ),
-            None,
-        )
-        assert node is not None
-        if supports_update:
-            button_entities.extend(
-                [
-                    DucoUpdateVentStateButton(
-                        entry.runtime_data, node, ActionEnum.AUTO
-                    ),
-                    DucoUpdateVentStateButton(
-                        entry.runtime_data, node, ActionEnum.MAN1
-                    ),
-                    DucoUpdateVentStateButton(
-                        entry.runtime_data, node, ActionEnum.MAN2
-                    ),
-                    DucoUpdateVentStateButton(
-                        entry.runtime_data, node, ActionEnum.MAN3
-                    ),
-                ]
-            )
-
-    async_add_entities(button_entities)
+    async_add_entities(add_entities)
 
 
-class DucoUpdateVentStateButton(DucoEntity, ButtonEntity):
-    """Representation of a identify button."""
+class DucoVentActionButtonEntity(DucoEntity, ButtonEntity):
+    """Representation of a ventilation action button."""
 
-    _attr_entity_category = EntityCategory.CONFIG
-    _attr_device_class = ButtonDeviceClass.UPDATE
+    entity_description: DucoButtonEntityDescription
 
     def __init__(
         self,
         coordinator: DucoDeviceUpdateCoordinator,
         node: NodeDataDTO,
-        action: ActionEnum,
+        description: DucoButtonEntityDescription,
     ) -> None:
         """Initialize button."""
         super().__init__(coordinator, node)
 
-        node_id = node.Node
-        self._attr_unique_id = (
-            f"{coordinator.config_entry.unique_id}_{action.value}_{node.Node}"
-        )
-        self._node_id = node_id
-        self._action = action
-        self._attr_name = f"Ventilation Mode {action.value}"
+        self._node_id = node.Node
+        self._action_state = "SetVentilationState"
+        self._attr_unique_id = f"{coordinator.config_entry.unique_id}_{self._node_id}"
 
-    # @duco_exception_handler
+        self.entity_description = description
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        return super().available and self.entity_description.available_fn(
+            self.coordinator.data, self._node_id, self._action_state
+        )
+
     async def async_press(self) -> None:
-        """Identify the device."""
-        await self.coordinator.api.set_ventilation_action(self._node_id, self._action)
+        """Activate the ventilation action."""
+        await self.entity_description.set_fn(
+            self.coordinator.api, self._node_id, self._action_state
+        )
+        await self.coordinator.async_refresh()

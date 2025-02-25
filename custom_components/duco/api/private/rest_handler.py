@@ -69,9 +69,9 @@ class RestHandler:
             f"{inspect.currentframe().f_code.co_name}  {self._base_url}{endpoint}"
         )
 
-        data = await self.get_with_retries(f"{self._base_url}{endpoint}")
-        if data:
-            return data
+        response_data = await self.get_with_retries(f"{self._base_url}{endpoint}")
+        if response_data:
+            return response_data
 
         return {}
 
@@ -125,11 +125,12 @@ class RestHandler:
     ) -> dict[str, Any] | None:
         _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
 
+        data_str = orjson.dumps(data).decode("utf-8")
+        headers = {"Content-Type": "application/json"}
+
         retries = 0
         while retries < self.max_retries:
             try:
-                data_str = orjson.dumps(data).decode("utf-8")
-                headers = {"Content-Type": "application/json"}
                 async with self._client_session.post(
                     url, headers=headers, ssl=False, data=data_str
                 ) as response:
@@ -180,6 +181,7 @@ class RestHandler:
             Response content or None if all retries fail.
         """
         _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
+
         retries = 0
         while retries < self.max_retries:
             try:
