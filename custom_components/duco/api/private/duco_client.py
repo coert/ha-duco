@@ -115,7 +115,7 @@ class DucoClient:
         self.scheme = "http"
         if self.info_general and self.info_general.Lan.HostName:
             self.netloc = self.info_general.Lan.HostName
-        self.host = f"{self.scheme}://{self.netloc}.local"
+        self.host = f"{self.scheme}://{self.netloc}"
 
         _LOGGER.debug(f"Connecting to {self.host} without SSL verification")
 
@@ -136,8 +136,9 @@ class DucoClient:
         self.scheme = "https"
         if self.info_general and self.info_general.Lan.HostName:
             self.netloc = self.info_general.Lan.HostName
+        self.host = f"{self.scheme}://{self.netloc}"
 
-        self.host = f"{self.scheme}://{self.netloc}.local"
+        _LOGGER.debug(f"Connecting securely to {self.host}")
 
         self._rest_handler = RestHandler(self.host, self._headers)
 
@@ -145,7 +146,6 @@ class DucoClient:
         _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
 
         if self._rest_handler:
-            # await self._rest_handler.close()
             self._rest_handler = None
 
     def get_pem_filepath(self):
