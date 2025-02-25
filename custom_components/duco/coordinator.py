@@ -78,9 +78,20 @@ class DucoDeviceUpdateCoordinator(DataUpdateCoordinator[DeviceResponseEntry]):
         try:
             await self.api.connect(api_key=self.api_key)
             nodes_data = await self.api.get_nodes()
-            self._duco_nidxs = {node.id for node in nodes_data.Nodes}
+            self._duco_nidxs = (
+                {node.id for node in nodes_data.Nodes}
+                if nodes_data is not None
+                else set()
+            )
 
         except ApiError as ex:
+            LOGGER.error(f"Error creating connection to Duco API: {ex}")
+
+            raise UpdateFailed(
+                ex, translation_domain=DOMAIN, translation_key="communication_error"
+            ) from ex
+
+        except Exception as ex:
             LOGGER.error(f"Error creating connection to Duco API: {ex}")
 
             raise UpdateFailed(
