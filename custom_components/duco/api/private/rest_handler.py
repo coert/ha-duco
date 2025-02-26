@@ -4,8 +4,14 @@ import logging
 import ssl
 from typing import Any
 import orjson
+from urllib.parse import urlparse
 
-from aiohttp import ClientResponseError, ClientSession, TCPConnector
+from aiohttp import (
+    ClientResponseError,
+    ClientConnectorDNSError,
+    ClientSession,
+    TCPConnector,
+)
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 
@@ -161,6 +167,18 @@ class RestHandler:
                 else:
                     raise  # Reraise for other HTTP errors
 
+            except ClientConnectorDNSError as e:
+                _LOGGER.error(f"DNS resolution error: {e}")
+
+                urlparsed = urlparse(url)
+                if urlparsed.netloc.endswith(".local"):
+                    _LOGGER.warning(f"Already tried with {url}")
+                    raise
+
+                url = urlparsed._replace(netloc=urlparsed.netloc + ".local").geturl()
+                _LOGGER.warning(f"Retrying with {url}")
+                await asyncio.sleep(self.base_delay)
+
         _LOGGER.warning(f"Failed to post {url} after {self.max_retries} retries.")
         return None
 
@@ -216,6 +234,22 @@ class RestHandler:
 
                 else:
                     raise  # Reraise for other HTTP errors
+
+            except ClientConnectorDNSError as e:
+                _LOGGER.error(f"DNS resolution error: {e}")
+
+                urlparsed = urlparse(url)
+                if urlparsed.netloc.endswith(".local"):
+                    _LOGGER.warning(f"Already tried with {url}")
+                    raise
+
+                url = urlparsed._replace(netloc=urlparsed.netloc + ".local").geturl()
+                _LOGGER.warning(f"Retrying with {url}")
+                await asyncio.sleep(self.base_delay)
+
+            except Exception as e:
+                _LOGGER.error(f"{type(e)=}, Error fetching {url}: {e}")
+                raise
 
         _LOGGER.warning(f"Failed to fetch {url} after {self.max_retries} retries.")
         return None

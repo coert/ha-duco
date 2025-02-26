@@ -178,15 +178,6 @@ SENSORS_DUCOBOX: tuple[DucoBoxSensorEntityDescription, ...] = (
 SENSORS_ZONES: dict[str, tuple[DucoNodeSensorEntityDescription, ...]] = {
     "BOX": (
         DucoNodeSensorEntityDescription(
-            key="mode",
-            name="Ventilation Mode",
-            sensor_key="Mode",
-            type="BOX",
-            value_fn=lambda node: node.Ventilation.Mode,
-            exists_fn=lambda node: node.Ventilation is not None
-            and node.Ventilation.Mode is not None,
-        ),
-        DucoNodeSensorEntityDescription(
             key="state",
             name="Ventilation State",
             sensor_key="State",
@@ -194,6 +185,35 @@ SENSORS_ZONES: dict[str, tuple[DucoNodeSensorEntityDescription, ...]] = {
             value_fn=lambda node: node.Ventilation.State,
             exists_fn=lambda node: node.Ventilation is not None
             and node.Ventilation.State is not None,
+        ),
+        DucoNodeSensorEntityDescription(
+            key="time_state_remain",
+            name="Time State Remaining",
+            sensor_key="TimeStateRemain",
+            type="BOX",
+            native_unit_of_measurement=UnitOfTime.SECONDS,
+            value_fn=lambda node: node.Ventilation.TimeStateRemain,
+            exists_fn=lambda node: node.Ventilation is not None
+            and node.Ventilation.TimeStateRemain is not None,
+        ),
+        DucoNodeSensorEntityDescription(
+            key="time_state_end",
+            name="Time State Ending",
+            sensor_key="TimeStateEnd",
+            type="BOX",
+            native_unit_of_measurement=UnitOfTime.SECONDS,
+            value_fn=lambda node: node.Ventilation.TimeStateEnd,
+            exists_fn=lambda node: node.Ventilation is not None
+            and node.Ventilation.TimeStateEnd is not None,
+        ),
+        DucoNodeSensorEntityDescription(
+            key="mode",
+            name="Ventilation Mode",
+            sensor_key="Mode",
+            type="BOX",
+            value_fn=lambda node: node.Ventilation.Mode,
+            exists_fn=lambda node: node.Ventilation is not None
+            and node.Ventilation.Mode is not None,
         ),
         DucoNodeSensorEntityDescription(
             key="flow_lvl_tgt",
@@ -229,26 +249,6 @@ SENSORS_ZONES: dict[str, tuple[DucoNodeSensorEntityDescription, ...]] = {
             and node.Ventilation.FlowLvlReqSensor is not None,
         ),
         DucoNodeSensorEntityDescription(
-            key="time_state_remain",
-            name="Time State Remaining",
-            sensor_key="TimeStateRemain",
-            type="BOX",
-            native_unit_of_measurement=UnitOfTime.SECONDS,
-            value_fn=lambda node: node.Ventilation.TimeStateRemain,
-            exists_fn=lambda node: node.Ventilation is not None
-            and node.Ventilation.TimeStateRemain is not None,
-        ),
-        DucoNodeSensorEntityDescription(
-            key="time_state_end",
-            name="Time State Ending",
-            sensor_key="TimeStateEnd",
-            type="BOX",
-            native_unit_of_measurement=UnitOfTime.SECONDS,
-            value_fn=lambda node: node.Ventilation.TimeStateEnd,
-            exists_fn=lambda node: node.Ventilation is not None
-            and node.Ventilation.TimeStateEnd is not None,
-        ),
-        DucoNodeSensorEntityDescription(
             key="temp",
             name="Temperature",
             sensor_key="Temp",
@@ -282,6 +282,44 @@ SENSORS_ZONES: dict[str, tuple[DucoNodeSensorEntityDescription, ...]] = {
         ),
     ),
     "UCCO2": (
+        DucoNodeSensorEntityDescription(
+            key="state",
+            name="Ventilation State",
+            sensor_key="State",
+            type="UCCO2",
+            value_fn=lambda node: node.Ventilation.State,
+            exists_fn=lambda node: node.Ventilation is not None
+            and node.Ventilation.State is not None,
+        ),
+        DucoNodeSensorEntityDescription(
+            key="time_state_remain",
+            name="Time State Remaining",
+            sensor_key="TimeStateRemain",
+            type="UCCO2",
+            native_unit_of_measurement=UnitOfTime.SECONDS,
+            value_fn=lambda node: node.Ventilation.TimeStateRemain,
+            exists_fn=lambda node: node.Ventilation is not None
+            and node.Ventilation.TimeStateRemain is not None,
+        ),
+        DucoNodeSensorEntityDescription(
+            key="time_state_end",
+            name="Time State Ending",
+            sensor_key="TimeStateEnd",
+            type="UCCO2",
+            native_unit_of_measurement=UnitOfTime.SECONDS,
+            value_fn=lambda node: node.Ventilation.TimeStateEnd,
+            exists_fn=lambda node: node.Ventilation is not None
+            and node.Ventilation.TimeStateEnd is not None,
+        ),
+        DucoNodeSensorEntityDescription(
+            key="mode",
+            name="Ventilation Mode",
+            sensor_key="Mode",
+            type="UCCO2",
+            value_fn=lambda node: node.Ventilation.Mode,
+            exists_fn=lambda node: node.Ventilation is not None
+            and node.Ventilation.Mode is not None,
+        ),
         DucoNodeSensorEntityDescription(
             key="temp",
             name="Temperature",
@@ -351,15 +389,6 @@ SENSORS_ZONES: dict[str, tuple[DucoNodeSensorEntityDescription, ...]] = {
     ),
     "UCBAT": (
         DucoNodeSensorEntityDescription(
-            key="mode",
-            name="Ventilation Mode",
-            sensor_key="Mode",
-            type="UCBAT",
-            value_fn=lambda node: node.Ventilation.Mode,
-            exists_fn=lambda node: node.Ventilation is not None
-            and node.Ventilation.Mode is not None,
-        ),
-        DucoNodeSensorEntityDescription(
             key="state",
             name="Ventilation State",
             sensor_key="State",
@@ -367,6 +396,35 @@ SENSORS_ZONES: dict[str, tuple[DucoNodeSensorEntityDescription, ...]] = {
             value_fn=lambda node: node.Ventilation.State,
             exists_fn=lambda node: node.Ventilation is not None
             and node.Ventilation.State is not None,
+        ),
+        DucoNodeSensorEntityDescription(
+            key="time_state_remain",
+            name="Time State Remaining",
+            sensor_key="TimeStateRemain",
+            type="UCBAT",
+            native_unit_of_measurement=UnitOfTime.SECONDS,
+            value_fn=lambda node: node.Ventilation.TimeStateRemain,
+            exists_fn=lambda node: node.Ventilation is not None
+            and node.Ventilation.TimeStateRemain is not None,
+        ),
+        DucoNodeSensorEntityDescription(
+            key="time_state_end",
+            name="Time State Ending",
+            sensor_key="TimeStateEnd",
+            type="UCBAT",
+            native_unit_of_measurement=UnitOfTime.SECONDS,
+            value_fn=lambda node: node.Ventilation.TimeStateEnd,
+            exists_fn=lambda node: node.Ventilation is not None
+            and node.Ventilation.TimeStateEnd is not None,
+        ),
+        DucoNodeSensorEntityDescription(
+            key="mode",
+            name="Ventilation Mode",
+            sensor_key="Mode",
+            type="UCBAT",
+            value_fn=lambda node: node.Ventilation.Mode,
+            exists_fn=lambda node: node.Ventilation is not None
+            and node.Ventilation.Mode is not None,
         ),
         DucoNodeSensorEntityDescription(
             key="flow_lvl_tgt",
@@ -400,26 +458,6 @@ SENSORS_ZONES: dict[str, tuple[DucoNodeSensorEntityDescription, ...]] = {
             suggested_display_precision=2,
             exists_fn=lambda node: node.Ventilation is not None
             and node.Ventilation.FlowLvlReqSensor is not None,
-        ),
-        DucoNodeSensorEntityDescription(
-            key="time_state_remain",
-            name="Time State Remaining",
-            sensor_key="TimeStateRemain",
-            type="UCBAT",
-            native_unit_of_measurement=UnitOfTime.SECONDS,
-            value_fn=lambda node: node.Ventilation.TimeStateRemain,
-            exists_fn=lambda node: node.Ventilation is not None
-            and node.Ventilation.TimeStateRemain is not None,
-        ),
-        DucoNodeSensorEntityDescription(
-            key="time_state_end",
-            name="Time State Ending",
-            sensor_key="TimeStateEnd",
-            type="UCBAT",
-            native_unit_of_measurement=UnitOfTime.SECONDS,
-            value_fn=lambda node: node.Ventilation.TimeStateEnd,
-            exists_fn=lambda node: node.Ventilation is not None
-            and node.Ventilation.TimeStateEnd is not None,
         ),
     ),
 }

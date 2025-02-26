@@ -36,9 +36,10 @@ class DucoButtonEntityDescription(ButtonEntityDescription):
 
 BUTTONS = [
     DucoButtonEntityDescription(
-        key="set_vent_state_auto",
-        name=None,
+        key="fan_state_auto",
+        name="Fan speed auto",
         device_class=ButtonDeviceClass.UPDATE,
+        icon="mdi:fan-auto",
         available_fn=lambda x, nidx, node_action: nidx in x.node_actions
         and any(
             action_enum == ActionEnum.AUTO.value
@@ -51,9 +52,10 @@ BUTTONS = [
         ),
     ),
     DucoButtonEntityDescription(
-        key="set_vent_state_man1",
-        name=None,
+        key="fan_state_man1",
+        name="Fan speed 1",
         device_class=ButtonDeviceClass.UPDATE,
+        icon="mdi:fan-speed-1",
         available_fn=lambda x, nidx, node_action: nidx in x.node_actions
         and any(
             action_enum == ActionEnum.MAN1.value
@@ -66,9 +68,10 @@ BUTTONS = [
         ),
     ),
     DucoButtonEntityDescription(
-        key="set_vent_state_man2",
-        name=None,
+        key="fan_state_man2",
+        name="Fan speed 2",
         device_class=ButtonDeviceClass.UPDATE,
+        icon="mdi:fan-speed-2",
         available_fn=lambda x, nidx, node_action: nidx in x.node_actions
         and any(
             action_enum == ActionEnum.MAN2.value
@@ -81,9 +84,10 @@ BUTTONS = [
         ),
     ),
     DucoButtonEntityDescription(
-        key="set_vent_state_man3",
-        name=None,
+        key="fan_state_man3",
+        name="Fan speed 3",
         device_class=ButtonDeviceClass.UPDATE,
+        icon="mdi:fan-speed-3",
         available_fn=lambda x, nidx, node_action: nidx in x.node_actions
         and any(
             action_enum == ActionEnum.MAN3.value
@@ -137,7 +141,10 @@ class DucoVentActionButtonEntity(DucoEntity, ButtonEntity):
 
         self._node_id = node.Node
         self._action_state = "SetVentilationState"
-        self._attr_unique_id = f"{coordinator.config_entry.unique_id}_{self._node_id}"
+        self._attr_unique_id = (
+            f"{coordinator.config_entry.unique_id}_{self._node_id}_{description.key}"
+        )
+        self.entity_id = f"button.{node.General.Type}_{description.key}"
 
         self.entity_description = description
 

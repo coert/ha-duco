@@ -129,13 +129,6 @@ class DucoDeviceUpdateCoordinator(DataUpdateCoordinator[DeviceResponseEntry]):
                     info = node_result
 
                 elif isinstance(node_result, NodeDataDTO):
-                    if not (
-                        node_result.Sensor is None or node_result.Sensor.Co2 is None
-                    ):
-                        LOGGER.warning(
-                            f"Node[{node_result.Node}] Co2 data: {node_result.Sensor.Co2}"
-                        )
-
                     nodes[node_result.Node] = node_result
 
                 elif isinstance(node_result, NodeActionsDTO):
