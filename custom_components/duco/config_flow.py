@@ -34,8 +34,6 @@ DATA_SCHEMA = vol.Schema(
 class DucoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Duco."""
 
-    VERSION = 1
-
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -70,7 +68,7 @@ class DucoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(
-        config_entry: config_entries.ConfigEntry,
+        _: config_entries.ConfigEntry,
     ) -> config_entries.OptionsFlow:
         """Get the options flow for this handler."""
         return DucoOptionsFlowHandler()
@@ -135,6 +133,12 @@ class DucoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Show confirmation form to the user
         return self.async_show_form(
             step_id="confirm",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_HOST, default=host): TextSelector(),
+                    vol.Required("update_interval", default=update_interval): int,
+                }
+            ),
             description_placeholders={
                 "host": host,
                 "update_interval": update_interval,
@@ -151,7 +155,7 @@ class DucoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """
         try:
             duco_client = DucoClient(host)
-            await duco_client.connect_insecure()
+            await duco_client.connect()
             info = await duco_client.get_info()
             assert info is not None, "InfoDTO not found"
             return info
@@ -191,7 +195,13 @@ class DucoOptionsFlowHandler(config_entries.OptionsFlow):
                         "update_interval": update_interval,
                     },
                 )
-                return self.async_create_entry(title="", data={})
+                return self.async_create_entry(
+                    title=MANUFACTURER,
+                    data={
+                        "host": host,
+                        "update_interval": update_interval,
+                    },
+                )
 
             except ApiError:
                 # Handle general API error
@@ -209,15 +219,15 @@ class DucoOptionsFlowHandler(config_entries.OptionsFlow):
             data_schema=vol.Schema(
                 {
                     vol.Required(
-                        "host",
+                        CONF_HOST,
                         default=self.config_entry.data.get("host", API_PRIVATE_URL),
-                    ): str,
+                    ): TextSelector(),
                     vol.Required(
                         "update_interval",
                         default=self.config_entry.data.get(
                             "update_interval", int(UPDATE_INTERVAL.total_seconds())
                         ),
-                    ): str,
+                    ): int,
                 }
             ),
             errors=errors,

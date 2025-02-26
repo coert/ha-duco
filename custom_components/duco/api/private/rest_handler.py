@@ -1,6 +1,5 @@
 import asyncio
 import inspect
-import logging
 import ssl
 from typing import Any
 import orjson
@@ -13,7 +12,7 @@ from aiohttp import (
     TCPConnector,
 )
 
-_LOGGER: logging.Logger = logging.getLogger(__package__)
+from ...const import LOGGER
 
 
 class RestHandler:
@@ -44,7 +43,7 @@ class RestHandler:
             asyncio.create_task(self.close())
 
         except Exception as e:
-            _LOGGER.warning(f"Error while closing session: {e}")
+            LOGGER.warning(f"Error while closing session: {e}")
             asyncio.new_event_loop().run_until_complete(self.close())
 
     @property
@@ -68,10 +67,10 @@ class RestHandler:
             await self._client_session.close()
 
         except Exception as e:
-            _LOGGER.error(f"Error while closing session: {e}")
+            LOGGER.error(f"Error while closing session: {e}")
 
     async def get(self, endpoint: str) -> dict[str, Any]:
-        _LOGGER.debug(
+        LOGGER.debug(
             f"{inspect.currentframe().f_code.co_name}  {self._base_url}{endpoint}"
         )
 
@@ -82,7 +81,7 @@ class RestHandler:
         return {}
 
     async def post(self, endpoint: str, data: dict[str, Any]) -> dict[str, Any]:
-        _LOGGER.debug(
+        LOGGER.debug(
             f"{inspect.currentframe().f_code.co_name}  {self._base_url}{endpoint}"
         )
 
@@ -129,7 +128,7 @@ class RestHandler:
         url: str,
         data: dict[str, Any],
     ) -> dict[str, Any] | None:
-        _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
+        LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
 
         data_str = orjson.dumps(data).decode("utf-8")
         headers = {"Content-Type": "application/json"}
@@ -138,9 +137,9 @@ class RestHandler:
         while retries < self.max_retries:
             try:
                 async with self._client_session.post(
-                    url, headers=headers, ssl=False, data=data_str
+                    url, headers=headers, ssl=False, timeout=20000, data=data_str
                 ) as response:
-                    _LOGGER.debug(f"Response status: {response.status}")
+                    LOGGER.debug(f"Response status: {response.status}")
 
                     if response.status in self._retriable_status_codes:
                         raise ClientResponseError(
@@ -159,7 +158,7 @@ class RestHandler:
                 if e.status in self._retriable_status_codes:
                     retries += 1
                     delay = self.base_delay * (2 ** (retries - 1))
-                    _LOGGER.warning(
+                    LOGGER.warning(
                         f"Retry {retries}/{self.max_retries}: Waiting {delay:.2f} seconds ({e.status} received)"
                     )
                     await asyncio.sleep(delay)
@@ -168,18 +167,18 @@ class RestHandler:
                     raise  # Reraise for other HTTP errors
 
             except ClientConnectorDNSError as e:
-                _LOGGER.error(f"DNS resolution error: {e}")
+                LOGGER.error(f"DNS resolution error: {e}")
 
                 urlparsed = urlparse(url)
                 if urlparsed.netloc.endswith(".local"):
-                    _LOGGER.warning(f"Already tried with {url}")
+                    LOGGER.warning(f"Already tried with {url}")
                     raise
 
                 url = urlparsed._replace(netloc=urlparsed.netloc + ".local").geturl()
-                _LOGGER.warning(f"Retrying with {url}")
+                LOGGER.warning(f"Retrying with {url}")
                 await asyncio.sleep(self.base_delay)
 
-        _LOGGER.warning(f"Failed to post {url} after {self.max_retries} retries.")
+        LOGGER.warning(f"Failed to post {url} after {self.max_retries} retries.")
         return None
 
     async def get_with_retries(
@@ -198,15 +197,15 @@ class RestHandler:
         Returns:
             Response content or None if all retries fail.
         """
-        _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
+        LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
 
         retries = 0
         while retries < self.max_retries:
             try:
                 async with self._client_session.get(
-                    url, headers=self._headers, ssl=False
+                    url, headers=self._headers, ssl=False, timeout=20000
                 ) as response:  # `ssl=False` skips SSL verification, equivalent to `-k`
-                    _LOGGER.debug(f"Response status: {response.status}")
+                    LOGGER.debug(f"Response status: {response.status}")
 
                     if response.status in self._retriable_status_codes:
                         raise ClientResponseError(
@@ -227,7 +226,7 @@ class RestHandler:
                     delay = self.base_delay * (
                         2 ** (retries - 1)
                     )  # Exponential backoff
-                    _LOGGER.warning(
+                    LOGGER.warning(
                         f"Retry {retries}/{self.max_retries}: Waiting {delay:.2f} seconds ({e.status} received)"
                     )
                     await asyncio.sleep(delay)
@@ -236,20 +235,20 @@ class RestHandler:
                     raise  # Reraise for other HTTP errors
 
             except ClientConnectorDNSError as e:
-                _LOGGER.error(f"DNS resolution error: {e}")
+                LOGGER.error(f"DNS resolution error: {e}")
 
                 urlparsed = urlparse(url)
                 if urlparsed.netloc.endswith(".local"):
-                    _LOGGER.warning(f"Already tried with {url}")
+                    LOGGER.warning(f"Already tried with {url}")
                     raise
 
                 url = urlparsed._replace(netloc=urlparsed.netloc + ".local").geturl()
-                _LOGGER.warning(f"Retrying with {url}")
+                LOGGER.warning(f"Retrying with {url}")
                 await asyncio.sleep(self.base_delay)
 
             except Exception as e:
-                _LOGGER.error(f"{type(e)=}, Error fetching {url}: {e}")
+                LOGGER.error(f"{type(e)=}, Error fetching {url}: {e}")
                 raise
 
-        _LOGGER.warning(f"Failed to fetch {url} after {self.max_retries} retries.")
+        LOGGER.warning(f"Failed to fetch {url} after {self.max_retries} retries.")
         return None

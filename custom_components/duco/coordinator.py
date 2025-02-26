@@ -34,6 +34,7 @@ class DucoDeviceUpdateCoordinator(DataUpdateCoordinator[DeviceResponseEntry]):
     _duco_nidxs: set[int]
 
     config_entry: ConfigEntry | None
+    data: DeviceResponseEntry
 
     def __init__(
         self,
@@ -62,11 +63,13 @@ class DucoDeviceUpdateCoordinator(DataUpdateCoordinator[DeviceResponseEntry]):
             )
             self.update_interval = UPDATE_INTERVAL
 
+        self._unsupported_error = False
+        self._duco_nidxs = set()
+
         self.api_key = api_key
         self.api = DucoClient(host)
 
-        self._unsupported_error = False
-        self._duco_nidxs = set()
+        self.data = DeviceResponseEntry()
 
     @property
     def duco_nidxs(self) -> set[int]:
@@ -77,12 +80,25 @@ class DucoDeviceUpdateCoordinator(DataUpdateCoordinator[DeviceResponseEntry]):
 
         try:
             await self.api.connect(api_key=self.api_key)
-            nodes_data = await self.api.get_nodes()
-            self._duco_nidxs = (
-                {node.id for node in nodes_data.Nodes}
-                if nodes_data is not None
-                else set()
-            )
+
+            api_results = await self.api.get_nodes()
+            if api_results is not None:
+                for node in api_results.Nodes:
+                    if node is not None:
+                        self.duco_nidxs.add(node.Node)
+                        self.data.nodes[node.Node] = node
+
+            calls: list[
+                Coroutine[Any, Any, NodeDataDTO | InfoDTO | NodeActionsDTO | None]
+            ] = [self.api.get_node_supported_actions(idx) for idx in self.duco_nidxs]
+            calls.append(self.api.get_info())
+            api_results = await asyncio.gather(*calls)
+
+            for result in api_results:
+                if isinstance(result, InfoDTO):
+                    self.data.info = result
+                elif isinstance(result, NodeActionsDTO):
+                    self.data.node_actions[result.Node] = result
 
         except ApiError as ex:
             LOGGER.error(f"Error creating connection to Duco API: {ex}")
@@ -112,31 +128,16 @@ class DucoDeviceUpdateCoordinator(DataUpdateCoordinator[DeviceResponseEntry]):
             if current_time > self.api.api_timestamp:
                 await self.api.update_key()
 
-            calls: list[
-                Coroutine[Any, Any, NodeDataDTO | InfoDTO | NodeActionsDTO | None]
-            ] = [self.api.get_node_info(idx) for idx in self.duco_nidxs]
-            calls.append(self.api.get_info())
-            calls.extend(
-                [self.api.get_node_supported_actions(idx) for idx in self.duco_nidxs]
-            )
-            duco_results = await asyncio.gather(*calls)
+            calls: list[Coroutine[Any, Any, NodeDataDTO | None]] = [
+                self.api.get_node_info(idx) for idx in self.duco_nidxs
+            ]
+            api_results = await asyncio.gather(*calls)
 
-            info: InfoDTO | None = None
-            nodes: dict[int, NodeDataDTO] = {}
-            node_actions: dict[int, NodeActionsDTO] = {}
-            for node_result in duco_results:
-                if isinstance(node_result, InfoDTO):
-                    info = node_result
-
-                elif isinstance(node_result, NodeDataDTO):
-                    nodes[node_result.Node] = node_result
-
-                elif isinstance(node_result, NodeActionsDTO):
-                    node_actions[node_result.Node] = node_result
-
-            self.data = DeviceResponseEntry(
-                info=info, nodes=nodes, node_actions=node_actions
-            )
+            self.data.nodes = {
+                node_result.Node: node_result
+                for node_result in api_results
+                if node_result is not None
+            }
 
         except ApiError as ex:
             LOGGER.error(f"Error fetching data from Duco API: {ex}")

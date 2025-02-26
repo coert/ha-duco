@@ -2,8 +2,10 @@
 
 Home Assistant integration for Ducobox Energy Wtw-units
 
-NEW: added ventilation fan speed control (AUTO, MAN1, MAN2, MAN3) for relevant nodes.
-
+NEW: 
+- added ventilation fan speed control (AUTO, MAN1, MAN2, MAN3) for relevant nodes.
+- added identify switch to nodes
+     
 # Attribution
 
 This code started out as a side project based on:

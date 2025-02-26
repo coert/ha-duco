@@ -10,3 +10,39 @@ def remove_val_fields(data):
         return [remove_val_fields(item) for item in data]
 
     return data
+
+
+def str_to_bool(arg: bool | bytes | str | None) -> bool | None:
+    """
+    Convert a string to bool value
+    :param arg:
+    :return: (bool)
+    """
+    if arg is None:
+        return False
+
+    try:
+        if isinstance(arg, bytes):
+            bstr = arg.decode("utf-8").lower()
+
+        elif isinstance(arg, str):
+            bstr = arg.lower()
+
+        elif isinstance(arg, bool):
+            return arg
+        elif isinstance(arg, bytes):
+            bstr = arg.decode("utf-8").lower()
+        else:
+            bstr = arg.lower()
+
+    except Exception:
+        return False
+
+    if bstr in ("yes", "true", "t", "y", "1"):
+        return True
+
+    elif bstr in ("no", "false", "f", "n", "0"):
+        return False
+
+    else:
+        return None

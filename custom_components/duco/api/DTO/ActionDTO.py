@@ -31,7 +31,12 @@ class NodeActionDTO:
 
 
 @dataclass
-class NodeActionPostDTO:
+class NodeActionTriggerDTO:
+    Action: str
+
+
+@dataclass
+class NodeActionSetDTO:
     Action: str
     Val: str
 

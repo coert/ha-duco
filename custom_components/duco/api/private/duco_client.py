@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import inspect
-import logging
 import time
+from typing import Any
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -12,14 +12,13 @@ from dataclasses import asdict
 from ...api.DTO.ApiDTO import ApiDetailsDTO
 from ...api.DTO.InfoDTO import GeneralDTO, InfoDTO
 from ...api.DTO.NodeInfoDTO import NodeDataDTO, NodesDataDTO
-from ...api.DTO.ActionDTO import ActionEnum, NodeActionPostDTO
+from ...api.DTO.ActionDTO import NodeActionTriggerDTO, NodeActionSetDTO
 from ...api.DTO.NodeActionDTO import NodeActionsDTO
+from ...const import LOGGER
 from ..utils import remove_val_fields
 from .api_key_generator import ApiKeyGenerator
 from .cert_handler import CustomSSLContext
 from .rest_handler import RestHandler
-
-_LOGGER: logging.Logger = logging.getLogger(__package__)
 
 _FILE_PATH = Path(__file__).resolve()
 
@@ -107,22 +106,8 @@ class DucoClient:
         else:
             raise ApiError("RestHandler not initialized")
 
-    async def connect_insecure(self) -> None:
-        _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
-
-        await self.disconnect()
-
-        self.scheme = "http"
-        if self.info_general and self.info_general.Lan.HostName:
-            self.netloc = self.info_general.Lan.HostName
-        self.host = f"{self.scheme}://{self.netloc}"
-
-        _LOGGER.debug(f"Connecting to {self.host} without SSL verification")
-
-        self._rest_handler = RestHandler(self.host, self._headers)
-
     async def connect(self, api_key: str | None = None) -> None:
-        _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
+        LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
 
         if api_key:
             self._headers.update({"Api-Key": api_key})
@@ -130,34 +115,29 @@ class DucoClient:
             self._api_timestamp = time.time() + 3600
 
         else:
+            self._rest_handler = RestHandler(self.host, self._headers)
             await self.update_key()
+            await self.disconnect()
 
-        await self.disconnect()
-        self.scheme = "https"
-        if self.info_general and self.info_general.Lan.HostName:
-            self.netloc = self.info_general.Lan.HostName
-        self.host = f"{self.scheme}://{self.netloc}"
-
-        _LOGGER.debug(f"Connecting securely to {self.host}")
-
+        LOGGER.debug(f"Connecting to {self.host}")
         self._rest_handler = RestHandler(self.host, self._headers)
 
     async def disconnect(self) -> None:
-        _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
+        LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
 
         if self._rest_handler:
             self._rest_handler = None
 
     def get_pem_filepath(self):
-        _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
+        LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
 
         pem_filepath = _FILE_PATH.parents[2] / "certs/api_cert.pem"
         assert pem_filepath.exists(), f"File not found: {pem_filepath}"
-        _LOGGER.debug(f"Loading pem file from {pem_filepath.name}")
+        LOGGER.debug(f"Loading pem file from {pem_filepath.name}")
         return pem_filepath
 
     async def _create_api_key(self, info_general: GeneralDTO):
-        _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
+        LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
 
         duco_mac = info_general.Lan.Mac
         duco_serial = info_general.Board.SerialBoardBox
@@ -174,17 +154,16 @@ class DucoClient:
 
         if info_general.Board.UpTime:
             up_since = time.time() - info_general.Board.UpTime * 60
-            _LOGGER.debug(f"DucoBox up since: {time.ctime(up_since)}")
+            LOGGER.debug(f"DucoBox up since: {time.ctime(up_since)}")
 
-        _LOGGER.debug(
+        LOGGER.debug(
             f"API key ({self._api_key}) valid until: {time.ctime(self._api_timestamp)}"
         )
 
     async def update_key(self) -> None:
-        _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
+        LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
 
         if not self._info_general:
-            await self.connect_insecure()
             info = await self.get_info()
             assert info, "Info not found"
             self._info_general = info.General
@@ -192,7 +171,7 @@ class DucoClient:
         await self._create_api_key(self._info_general)
 
     async def get_api_info(self) -> ApiDetailsDTO | None:
-        _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
+        LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
 
         try:
             api_info_val_dict = await self.rest_handler.get("/api")
@@ -200,11 +179,11 @@ class DucoClient:
             return from_dict(ApiDetailsDTO, api_info_dict)  # type: ignore
 
         except Exception as e:
-            _LOGGER.error(f"Error while getting API info: {e}")
+            LOGGER.error(f"Error while getting API info: {e}")
             return None
 
     async def get_info(self) -> InfoDTO | None:
-        _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
+        LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
         try:
             info_val_dict = await self.rest_handler.get("/info")
             info_dict = remove_val_fields(info_val_dict)
@@ -213,11 +192,11 @@ class DucoClient:
             return info
 
         except Exception as e:
-            _LOGGER.error(f"Error while getting info: {e}")
+            LOGGER.error(f"Error while getting info: {e}")
             return None
 
     async def get_nodes(self) -> NodesDataDTO | None:
-        _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
+        LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
         try:
             nodes_val_dict = await self.rest_handler.get("/info/nodes")
             nodes = [
@@ -227,11 +206,11 @@ class DucoClient:
             return NodesDataDTO(**{"Nodes": nodes})  # type: ignore
 
         except Exception as e:
-            _LOGGER.error(f"Error while getting nodes: {e}")
+            LOGGER.error(f"Error while getting nodes: {e}")
             return None
 
     async def get_node_info(self, node_id: int) -> NodeDataDTO | None:
-        _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
+        LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
 
         try:
             node_info_val_dict = await self.rest_handler.get(f"/info/nodes/{node_id}")
@@ -239,27 +218,37 @@ class DucoClient:
             return from_dict(NodeDataDTO, node_info_dict)  # type: ignore
 
         except Exception as e:
-            _LOGGER.error(f"Error while getting nodes: {e}")
+            LOGGER.error(f"Error while getting nodes: {e}")
             return None
 
     async def get_node_supported_actions(self, node_id: int) -> NodeActionsDTO | None:
-        _LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
+        LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
 
         try:
             supported_actions = await self.rest_handler.get(f"/action/nodes/{node_id}")
             return from_dict(NodeActionsDTO, supported_actions)  # type: ignore
 
         except Exception as e:
-            _LOGGER.error(f"Error while getting supported actions: {e}")
+            LOGGER.error(f"Error while getting supported actions: {e}")
             return None
 
-    async def set_node_action_state(
-        self, node_id: int, action: str, state: ActionEnum
-    ) -> None:
+    async def set_node_action_trigger(self, node_id: int, action: str):
+        LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
+
         try:
-            actions = asdict(NodeActionPostDTO(Action=action, Val=state.value))
+            actions = asdict(NodeActionTriggerDTO(Action=action))
             await self.rest_handler.post(f"/action/nodes/{node_id}", actions)
-            _LOGGER.debug(f"Set action {state} for node {node_id}")
+            LOGGER.debug(f"Triggered action {action} for node {node_id}")
 
         except Exception as e:
-            _LOGGER.error(f"Error while setting action: {e}")
+            LOGGER.error(f"Error while getting action state: {e}")
+
+    async def set_node_action_state(self, node_id: int, action: str, state: Any):
+        try:
+            actions = asdict(NodeActionSetDTO(Action=action, Val=state))
+            LOGGER.debug(f"Set action {action} to {state} for node {node_id}")
+            LOGGER.debug(f"{actions=}")
+            await self.rest_handler.post(f"/action/nodes/{node_id}", actions)
+
+        except Exception as e:
+            LOGGER.error(f"Error while setting action: {e}")

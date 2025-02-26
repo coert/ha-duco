@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-import logging
 from typing import Any, Coroutine
 from dataclasses import dataclass
 from collections.abc import Awaitable, Callable
@@ -19,23 +18,23 @@ from . import DucoConfigEntry
 from .api.private.duco_client import DucoClient
 from .api.DTO.NodeInfoDTO import NodeDataDTO
 from .api.DTO.ActionDTO import ActionEnum
-from .const import DeviceResponseEntry
+from .const import DeviceResponseEntry, LOGGER
 from .coordinator import DucoDeviceUpdateCoordinator
 from .entity import DucoEntity
-
-_LOGGER: logging.Logger = logging.getLogger(__package__)
 
 
 @dataclass(frozen=True, kw_only=True)
 class DucoButtonEntityDescription(ButtonEntityDescription):
     """Class describing Duco button entities."""
 
+    action_state: str
     available_fn: Callable[[DeviceResponseEntry, int, str], bool]
     set_fn: Callable[[DucoClient, int, str], Awaitable[None]]
 
 
 BUTTONS = [
     DucoButtonEntityDescription(
+        action_state="SetVentilationState",
         key="fan_state_auto",
         name="Fan speed auto",
         device_class=ButtonDeviceClass.UPDATE,
@@ -48,10 +47,11 @@ BUTTONS = [
             for action_enum in action.Enum
         ),
         set_fn=lambda api, nidx, node_action: api.set_node_action_state(
-            nidx, node_action, ActionEnum.AUTO
+            nidx, node_action, ActionEnum.AUTO.value
         ),
     ),
     DucoButtonEntityDescription(
+        action_state="SetVentilationState",
         key="fan_state_man1",
         name="Fan speed 1",
         device_class=ButtonDeviceClass.UPDATE,
@@ -64,10 +64,11 @@ BUTTONS = [
             for action_enum in action.Enum
         ),
         set_fn=lambda api, nidx, node_action: api.set_node_action_state(
-            nidx, node_action, ActionEnum.MAN1
+            nidx, node_action, ActionEnum.MAN1.value
         ),
     ),
     DucoButtonEntityDescription(
+        action_state="SetVentilationState",
         key="fan_state_man2",
         name="Fan speed 2",
         device_class=ButtonDeviceClass.UPDATE,
@@ -80,10 +81,11 @@ BUTTONS = [
             for action_enum in action.Enum
         ),
         set_fn=lambda api, nidx, node_action: api.set_node_action_state(
-            nidx, node_action, ActionEnum.MAN2
+            nidx, node_action, ActionEnum.MAN2.value
         ),
     ),
     DucoButtonEntityDescription(
+        action_state="SetVentilationState",
         key="fan_state_man3",
         name="Fan speed 3",
         device_class=ButtonDeviceClass.UPDATE,
@@ -96,7 +98,7 @@ BUTTONS = [
             for action_enum in action.Enum
         ),
         set_fn=lambda api, nidx, node_action: api.set_node_action_state(
-            nidx, node_action, ActionEnum.MAN3
+            nidx, node_action, ActionEnum.MAN3.value
         ),
     ),
 ]
@@ -107,7 +109,7 @@ async def async_setup_entry(
     entry: DucoConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    _LOGGER.debug(f"button:{inspect.currentframe().f_code.co_name}")
+    LOGGER.debug(f"button:{inspect.currentframe().f_code.co_name}")
 
     """Set up the Identify button."""
     calls_nodes: list[Coroutine[Any, Any, NodeDataDTO | None]] = []
@@ -140,7 +142,7 @@ class DucoVentActionButtonEntity(DucoEntity, ButtonEntity):
         super().__init__(coordinator, node)
 
         self._node_id = node.Node
-        self._action_state = "SetVentilationState"
+        self._action_state = description.action_state
         self._attr_unique_id = (
             f"{coordinator.config_entry.unique_id}_{self._node_id}_{description.key}"
         )
