@@ -1,7 +1,7 @@
 {
   "domain": "duco",
   "name": "Duco",
-  "version": "2.2.1",
+  "version": "2.3.0",
   "documentation": "https://github.com/coert/ha-duco",
   "dependencies": [
     "sensor",
