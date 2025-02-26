@@ -122,8 +122,12 @@ class DucoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_create_entry(
                 title=MANUFACTURER,
                 data={
-                    "host": user_input["host"],
-                    "update_interval": user_input["update_interval"],
+                    "host": user_input["host"]
+                    if "host" in user_input and user_input["host"]
+                    else host,
+                    "update_interval": user_input["update_interval"]
+                    if "update_interval" in user_input and user_input["update_interval"]
+                    else update_interval,
                     "unique_id": unique_id,
                 },
             )
