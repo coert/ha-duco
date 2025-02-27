@@ -38,12 +38,14 @@ class DucoClient:
     _info_general: GeneralDTO | None
     _api_key: str
     _api_timestamp: float
+    _api_time_valid: float
 
     def __init__(self, host: str) -> None:
         self._host = host
         parsed_url = urlparse(host)
         self._scheme = parsed_url.scheme
         self._netloc = parsed_url.netloc
+        self._api_time_valid = 3600
 
         self._headers = {
             "Accept-Encoding": "gzip, deflate",
@@ -95,6 +97,10 @@ class DucoClient:
         return self._api_timestamp
 
     @property
+    def api_time_valid(self) -> float:
+        return self._api_time_valid
+
+    @property
     def info_general(self) -> GeneralDTO | None:
         return self._info_general
 
@@ -141,7 +147,14 @@ class DucoClient:
 
         duco_mac = info_general.Lan.Mac
         duco_serial = info_general.Board.SerialBoardBox
-        duco_time = info_general.Board.Time
+
+        if info_general.Board.Time is None:
+            duco_time = round(time.time() + self.api_time_valid)
+
+        else:
+            duco_time = info_general.Board.Time
+            self._api_time_valid = duco_time - time.time()
+
         assert duco_mac and duco_serial and duco_time, "Invalid data"
 
         api_key_generator = ApiKeyGenerator()
@@ -157,7 +170,7 @@ class DucoClient:
             LOGGER.debug(f"DucoBox up since: {time.ctime(up_since)}")
 
         LOGGER.debug(
-            f"API key ({self._api_key}) valid until: {time.ctime(self._api_timestamp)}"
+            f"API key ({self._api_key}) valid until: {time.ctime(self._api_timestamp)} ({self.api_time_valid=})"
         )
 
     async def update_key(self) -> None:
@@ -167,6 +180,9 @@ class DucoClient:
             info = await self.get_info()
             assert info, "Info not found"
             self._info_general = info.General
+
+        else:
+            self._info_general.Board.Time = None
 
         await self._create_api_key(self._info_general)
 

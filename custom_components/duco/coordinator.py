@@ -125,6 +125,7 @@ class DucoDeviceUpdateCoordinator(DataUpdateCoordinator[DeviceResponseEntry]):
             LOGGER.debug(
                 f"API key valid until: {time.ctime(self.api.api_timestamp)} ({self.api.api_timestamp=})"
             )
+
             if current_time > self.api.api_timestamp:
                 await self.api.update_key()
 
