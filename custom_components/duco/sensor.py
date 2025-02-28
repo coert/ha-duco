@@ -35,7 +35,7 @@ class DucoBoxSensorEntityDescription(SensorEntityDescription):
     """Describes an Duco sensor entity."""
 
     enabled_fn: Callable[[InfoDTO], bool] = lambda data: True
-    exists_fn: Callable[[InfoDTO], bool] = lambda _: True
+    exists_fn: Callable[[InfoDTO | None], bool] = lambda _: True
     value_fn: Callable[[InfoDTO], float | int | str | None] = lambda _: None
 
 
@@ -60,7 +60,8 @@ SENSORS_DUCOBOX: tuple[DucoBoxSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         value_fn=lambda device: _proc_temp(device.Ventilation.Sensor.TempOda),
-        exists_fn=lambda device: device.Ventilation is not None
+        exists_fn=lambda device: device is not None
+        and device.Ventilation is not None
         and device.Ventilation.Sensor is not None
         and device.Ventilation.Sensor.TempOda is not None,
     ),
@@ -72,7 +73,8 @@ SENSORS_DUCOBOX: tuple[DucoBoxSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         value_fn=lambda device: _proc_temp(device.Ventilation.Sensor.TempSup),
-        exists_fn=lambda device: device.Ventilation is not None
+        exists_fn=lambda device: device is not None
+        and device.Ventilation is not None
         and device.Ventilation.Sensor is not None
         and device.Ventilation.Sensor.TempOda is not None,
     ),
@@ -84,7 +86,8 @@ SENSORS_DUCOBOX: tuple[DucoBoxSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         value_fn=lambda device: _proc_temp(device.Ventilation.Sensor.TempEta),
-        exists_fn=lambda device: device.Ventilation is not None
+        exists_fn=lambda device: device is not None
+        and device.Ventilation is not None
         and device.Ventilation.Sensor is not None
         and device.Ventilation.Sensor.TempOda is not None,
     ),
@@ -96,7 +99,8 @@ SENSORS_DUCOBOX: tuple[DucoBoxSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         value_fn=lambda device: _proc_temp(device.Ventilation.Sensor.TempEha),
-        exists_fn=lambda device: device.Ventilation is not None
+        exists_fn=lambda device: device is not None
+        and device.Ventilation is not None
         and device.Ventilation.Sensor is not None
         and device.Ventilation.Sensor.TempOda is not None,
     ),
@@ -107,7 +111,8 @@ SENSORS_DUCOBOX: tuple[DucoBoxSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=REVOLUTIONS_PER_MINUTE,
         value_fn=lambda device: _proc_speed(device.Ventilation.Fan.SpeedSup),
-        exists_fn=lambda device: device.Ventilation is not None
+        exists_fn=lambda device: device is not None
+        and device.Ventilation is not None
         and device.Ventilation.Fan is not None
         and device.Ventilation.Fan.SpeedSup is not None,
     ),
@@ -118,7 +123,8 @@ SENSORS_DUCOBOX: tuple[DucoBoxSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=REVOLUTIONS_PER_MINUTE,
         value_fn=lambda device: _proc_speed(device.Ventilation.Fan.SpeedEha),
-        exists_fn=lambda device: device.Ventilation is not None
+        exists_fn=lambda device: device is not None
+        and device.Ventilation is not None
         and device.Ventilation.Fan is not None
         and device.Ventilation.Fan.SpeedEha is not None,
     ),
@@ -130,9 +136,50 @@ SENSORS_DUCOBOX: tuple[DucoBoxSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.PRESSURE,
         native_unit_of_measurement=UnitOfPressure.PA,
         value_fn=lambda device: _proc_press(device.Ventilation.Fan.PressSup),
-        exists_fn=lambda device: device.Ventilation is not None
+        exists_fn=lambda device: device is not None
+        and device.Ventilation is not None
         and device.Ventilation.Fan is not None
         and device.Ventilation.Fan.PressSup is not None,
+    ),
+    DucoBoxSensorEntityDescription(
+        key="pwm_lvl_supply",
+        name="PWM Level (Supply)",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda device: _proc_pwm(device.Ventilation.Fan.PwmLvlSup),
+        exists_fn=lambda device: device is not None
+        and device.Ventilation is not None
+        and device.Ventilation.Fan is not None
+        and device.Ventilation.Fan.PwmLvlSup is not None,
+    ),
+    DucoBoxSensorEntityDescription(
+        key="pwm_supply",
+        name="PWM (Supply)",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda device: _proc_pwm(device.Ventilation.Fan.PwmSup),
+        exists_fn=lambda device: device is not None
+        and device.Ventilation is not None
+        and device.Ventilation.Fan is not None
+        and device.Ventilation.Fan.PwmSup is not None,
+    ),
+    DucoBoxSensorEntityDescription(
+        key="pwm_lvl_eha",
+        name="PWM Level (Exhaust)",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda device: _proc_pwm(device.Ventilation.Fan.PwmLvlEha),
+        exists_fn=lambda device: device is not None
+        and device.Ventilation is not None
+        and device.Ventilation.Fan is not None
+        and device.Ventilation.Fan.PwmLvlEha is not None,
+    ),
+    DucoBoxSensorEntityDescription(
+        key="pwm_eha",
+        name="PWM (Exhaust)",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda device: _proc_pwm(device.Ventilation.Fan.PwmEha),
+        exists_fn=lambda device: device is not None
+        and device.Ventilation is not None
+        and device.Ventilation.Fan is not None
+        and device.Ventilation.Fan.PwmEha is not None,
     ),
     DucoBoxSensorEntityDescription(
         key="pressure_eha",
@@ -142,7 +189,8 @@ SENSORS_DUCOBOX: tuple[DucoBoxSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.PRESSURE,
         native_unit_of_measurement=UnitOfPressure.PA,
         value_fn=lambda device: _proc_press(device.Ventilation.Fan.PressEha),
-        exists_fn=lambda device: device.Ventilation is not None
+        exists_fn=lambda device: device is not None
+        and device.Ventilation is not None
         and device.Ventilation.Fan is not None
         and device.Ventilation.Fan.PressEha is not None,
     ),
@@ -154,7 +202,8 @@ SENSORS_DUCOBOX: tuple[DucoBoxSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.DAYS,
         value_fn=lambda device: device.HeatRecovery.General.TimeFilterRemain,
-        exists_fn=lambda device: device.HeatRecovery is not None
+        exists_fn=lambda device: device is not None
+        and device.HeatRecovery is not None
         and device.HeatRecovery.General is not None
         and device.HeatRecovery.General.TimeFilterRemain is not None,
     ),
@@ -166,7 +215,8 @@ SENSORS_DUCOBOX: tuple[DucoBoxSensorEntityDescription, ...] = (
         native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         value_fn=lambda device: device.General.Lan.RssiWifi,
-        exists_fn=lambda device: device.General is not None
+        exists_fn=lambda device: device is not None
+        and device.General is not None
         and device.General.Lan is not None
         and device.General.Lan.RssiWifi is not None,
     ),
@@ -475,6 +525,10 @@ def _proc_pct(pct: int | None) -> float | None:
     return (pct / 255) * 100 if pct is not None else None
 
 
+def _proc_pwm(press: int | None) -> int | None:
+    return press if press is not None else None
+
+
 async def async_setup_entry(
     _: HomeAssistant,
     entry: DucoConfigEntry,
@@ -482,22 +536,18 @@ async def async_setup_entry(
 ) -> None:
     LOGGER.debug(f"sensor:{inspect.currentframe().f_code.co_name}")
 
-    box_info = entry.runtime_data.data.info
     entities: list[DucoEntity] = [
         DucoBoxSensorEntity(entry.runtime_data, description)
         for description in SENSORS_DUCOBOX
-        if box_info and description.exists_fn(box_info)
+        if description.exists_fn(entry.runtime_data.data.info)
     ]
-
-    nodes_data = entry.runtime_data.data.nodes
-    for node in nodes_data.values():
-        key = node.General.Type
-        node_entities: list[DucoEntity] = [
-            DucoNodeSensorEntity(entry.runtime_data, description, node)
-            for description in SENSORS_ZONES.get(key, ())
-            if description.exists_fn(node)
-        ]
-        entities.extend(node_entities)
+    node_entities: list[DucoEntity] = [
+        DucoNodeSensorEntity(entry.runtime_data, description, node)
+        for node in entry.runtime_data.data.nodes.values()
+        for description in SENSORS_ZONES.get(node.General.Type, ())
+        if description.exists_fn(node)
+    ]
+    entities.extend(node_entities)
 
     async_add_entities(entities)
 

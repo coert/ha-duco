@@ -1,14 +1,16 @@
 import asyncio
 import inspect
 import ssl
-from typing import Any
 import orjson
+from typing import Any
 from urllib.parse import urlparse
 
 from aiohttp import (
     ClientResponseError,
     ClientConnectorDNSError,
+    ServerDisconnectedError,
     ClientSession,
+    ClientTimeout,
     TCPConnector,
 )
 
@@ -25,6 +27,8 @@ class RestHandler:
     _connector: TCPConnector | None
     _client_session: ClientSession
 
+    _headers: dict[str, str]
+
     def __init__(
         self,
         base_url: str,
@@ -37,6 +41,8 @@ class RestHandler:
         self._ssl_context = ssl_context
         self._connector = connector
         self._client_session = ClientSession()
+
+        self.headers.update({"Content-Type": "application/json"})
 
     def __del__(self):
         try:
@@ -61,6 +67,14 @@ class RestHandler:
     @base_delay.setter
     def base_delay(self, value: float):
         self._base_delay = value
+
+    @property
+    def headers(self) -> dict[str, str]:
+        return self._headers
+
+    @headers.setter
+    def headers(self, value: dict[str, str]):
+        self._headers = value
 
     async def close(self):
         try:
@@ -93,15 +107,18 @@ class RestHandler:
 
         return {}
 
-    async def patch(self, endpoint: str):
-        async with self._client_session.patch(
-            f"{self._base_url}{endpoint}",
-            headers=self._headers,
-            ssl=False,
-        ) as response:
-            response.raise_for_status()
-            data = await response.json()
-            return data
+    async def patch(self, endpoint: str, data: dict[str, Any]):
+        LOGGER.debug(
+            f"{inspect.currentframe().f_code.co_name}  {self._base_url}{endpoint}"
+        )
+
+        response_data = await self.patch_with_retries(
+            f"{self._base_url}{endpoint}", data
+        )
+        if response_data:
+            return response_data
+
+        return {}
 
     async def delete(self, endpoint: str):
         async with self._client_session.delete(
@@ -123,7 +140,7 @@ class RestHandler:
             data = await response.json()
             return data
 
-    async def post_with_retries(
+    async def patch_with_retries(
         self,
         url: str,
         data: dict[str, Any],
@@ -131,13 +148,16 @@ class RestHandler:
         LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
 
         data_str = orjson.dumps(data).decode("utf-8")
-        headers = {"Content-Type": "application/json"}
 
         retries = 0
         while retries < self.max_retries:
             try:
-                async with self._client_session.post(
-                    url, headers=headers, ssl=False, timeout=20000, data=data_str
+                async with self._client_session.patch(
+                    url,
+                    headers=self.headers,
+                    ssl=False,
+                    timeout=ClientTimeout(total=20000, sock_connect=300),
+                    data=data_str,
                 ) as response:
                     LOGGER.debug(f"Response status: {response.status}")
 
@@ -178,6 +198,93 @@ class RestHandler:
                 LOGGER.warning(f"Retrying with {url}")
                 await asyncio.sleep(self.base_delay)
 
+            except ServerDisconnectedError as e:
+                LOGGER.error(f"Server disconnected error: {e}")
+                retries += 1
+                delay = self.base_delay * (2 ** (retries - 1))
+                LOGGER.warning(
+                    f"Retry {retries}/{self.max_retries}: Waiting {delay:.2f} seconds ({e.message} received)"
+                )
+                await asyncio.sleep(delay)
+
+            except Exception as e:
+                LOGGER.error(f"{type(e)=}, Error fetching {url}: {e}")
+                raise
+
+        LOGGER.warning(f"Failed to post {url} after {self.max_retries} retries.")
+        return None
+
+    async def post_with_retries(
+        self,
+        url: str,
+        data: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
+
+        data_str = orjson.dumps(data).decode("utf-8")
+
+        retries = 0
+        while retries < self.max_retries:
+            try:
+                async with self._client_session.post(
+                    url,
+                    headers=self.headers,
+                    ssl=False,
+                    timeout=ClientTimeout(total=20000, sock_connect=300),
+                    data=data_str,
+                ) as response:
+                    LOGGER.debug(f"Response status: {response.status}")
+
+                    if response.status in self._retriable_status_codes:
+                        raise ClientResponseError(
+                            request_info=response.request_info,
+                            history=response.history,
+                            status=response.status,
+                            message="Service Unavailable",
+                        )
+
+                    else:
+                        response.raise_for_status()
+
+                    return await response.json()
+
+            except ClientResponseError as e:
+                if e.status in self._retriable_status_codes:
+                    retries += 1
+                    delay = self.base_delay * (2 ** (retries - 1))
+                    LOGGER.warning(
+                        f"Retry {retries}/{self.max_retries}: Waiting {delay:.2f} seconds ({e.status} received)"
+                    )
+                    await asyncio.sleep(delay)
+
+                else:
+                    raise  # Reraise for other HTTP errors
+
+            except ClientConnectorDNSError as e:
+                LOGGER.error(f"DNS resolution error: {e}")
+
+                urlparsed = urlparse(url)
+                if urlparsed.netloc.endswith(".local"):
+                    LOGGER.warning(f"Already tried with {url}")
+                    raise
+
+                url = urlparsed._replace(netloc=urlparsed.netloc + ".local").geturl()
+                LOGGER.warning(f"Retrying with {url}")
+                await asyncio.sleep(self.base_delay)
+
+            except ServerDisconnectedError as e:
+                LOGGER.error(f"Server disconnected error: {e}")
+                retries += 1
+                delay = self.base_delay * (2 ** (retries - 1))
+                LOGGER.warning(
+                    f"Retry {retries}/{self.max_retries}: Waiting {delay:.2f} seconds ({e.message} received)"
+                )
+                await asyncio.sleep(delay)
+
+            except Exception as e:
+                LOGGER.error(f"{type(e)=}, Error fetching {url}: {e}")
+                raise
+
         LOGGER.warning(f"Failed to post {url} after {self.max_retries} retries.")
         return None
 
@@ -203,7 +310,10 @@ class RestHandler:
         while retries < self.max_retries:
             try:
                 async with self._client_session.get(
-                    url, headers=self._headers, ssl=False, timeout=20000
+                    url,
+                    headers=self._headers,
+                    ssl=False,
+                    timeout=ClientTimeout(total=20000, sock_connect=300),
                 ) as response:  # `ssl=False` skips SSL verification, equivalent to `-k`
                     LOGGER.debug(f"Response status: {response.status}")
 
@@ -245,6 +355,15 @@ class RestHandler:
                 url = urlparsed._replace(netloc=urlparsed.netloc + ".local").geturl()
                 LOGGER.warning(f"Retrying with {url}")
                 await asyncio.sleep(self.base_delay)
+
+            except ServerDisconnectedError as e:
+                LOGGER.error(f"Server disconnected error: {e}")
+                retries += 1
+                delay = self.base_delay * (2 ** (retries - 1))
+                LOGGER.warning(
+                    f"Retry {retries}/{self.max_retries}: Waiting {delay:.2f} seconds ({e.message} received)"
+                )
+                await asyncio.sleep(delay)
 
             except Exception as e:
                 LOGGER.error(f"{type(e)=}, Error fetching {url}: {e}")

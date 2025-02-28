@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import asyncio
 import inspect
-from typing import Any, Coroutine
 from dataclasses import dataclass
 from collections.abc import Awaitable, Callable
 
@@ -28,6 +26,7 @@ class DucoButtonEntityDescription(ButtonEntityDescription):
     """Class describing Duco button entities."""
 
     action_state: str
+    exists_fn: Callable[[DeviceResponseEntry, int, str], bool] = lambda x, y, z: True
     available_fn: Callable[[DeviceResponseEntry, int, str], bool]
     set_fn: Callable[[DucoClient, int, str], Awaitable[None]]
 
@@ -36,9 +35,16 @@ BUTTONS = [
     DucoButtonEntityDescription(
         action_state="SetVentilationState",
         key="fan_state_auto",
-        name="Fan speed auto",
+        name="Fan speed AUTO",
         device_class=ButtonDeviceClass.UPDATE,
         icon="mdi:fan-auto",
+        exists_fn=lambda x, nidx, node_action: nidx in x.node_actions
+        and any(
+            action_enum == ActionEnum.AUTO.value
+            for action in x.node_actions[nidx].Actions
+            if action.Action == node_action and action.Enum is not None
+            for action_enum in action.Enum
+        ),
         available_fn=lambda x, nidx, node_action: nidx in x.node_actions
         and any(
             action_enum == ActionEnum.AUTO.value
@@ -53,9 +59,16 @@ BUTTONS = [
     DucoButtonEntityDescription(
         action_state="SetVentilationState",
         key="fan_state_man1",
-        name="Fan speed 1",
+        name="Fan speed MAN1",
         device_class=ButtonDeviceClass.UPDATE,
         icon="mdi:fan-speed-1",
+        exists_fn=lambda x, nidx, node_action: nidx in x.node_actions
+        and any(
+            action_enum == ActionEnum.MAN1.value
+            for action in x.node_actions[nidx].Actions
+            if action.Action == node_action and action.Enum is not None
+            for action_enum in action.Enum
+        ),
         available_fn=lambda x, nidx, node_action: nidx in x.node_actions
         and any(
             action_enum == ActionEnum.MAN1.value
@@ -70,9 +83,16 @@ BUTTONS = [
     DucoButtonEntityDescription(
         action_state="SetVentilationState",
         key="fan_state_man2",
-        name="Fan speed 2",
+        name="Fan speed MAN2",
         device_class=ButtonDeviceClass.UPDATE,
         icon="mdi:fan-speed-2",
+        exists_fn=lambda x, nidx, node_action: nidx in x.node_actions
+        and any(
+            action_enum == ActionEnum.MAN2.value
+            for action in x.node_actions[nidx].Actions
+            if action.Action == node_action and action.Enum is not None
+            for action_enum in action.Enum
+        ),
         available_fn=lambda x, nidx, node_action: nidx in x.node_actions
         and any(
             action_enum == ActionEnum.MAN2.value
@@ -87,9 +107,16 @@ BUTTONS = [
     DucoButtonEntityDescription(
         action_state="SetVentilationState",
         key="fan_state_man3",
-        name="Fan speed 3",
+        name="Fan speed MAN3",
         device_class=ButtonDeviceClass.UPDATE,
         icon="mdi:fan-speed-3",
+        exists_fn=lambda x, nidx, node_action: nidx in x.node_actions
+        and any(
+            action_enum == ActionEnum.MAN3.value
+            for action in x.node_actions[nidx].Actions
+            if action.Action == node_action and action.Enum is not None
+            for action_enum in action.Enum
+        ),
         available_fn=lambda x, nidx, node_action: nidx in x.node_actions
         and any(
             action_enum == ActionEnum.MAN3.value
@@ -112,16 +139,11 @@ async def async_setup_entry(
     LOGGER.debug(f"button:{inspect.currentframe().f_code.co_name}")
 
     """Set up the Identify button."""
-    calls_nodes: list[Coroutine[Any, Any, NodeDataDTO | None]] = []
-    for node_id in entry.runtime_data.duco_nidxs:
-        calls_nodes.append(entry.runtime_data.api.get_node_info(node_id))
-    node_results = await asyncio.gather(*calls_nodes)
-
     add_entities: list[DucoVentActionButtonEntity] = [
         DucoVentActionButtonEntity(entry.runtime_data, node, button)
-        for node in node_results
-        if node is not None
+        for node in entry.runtime_data.data.nodes.values()
         for button in BUTTONS
+        if button.exists_fn(entry.runtime_data.data, node.Node, button.action_state)
     ]
 
     async_add_entities(add_entities)

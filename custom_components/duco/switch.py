@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import asyncio
 import inspect
-from typing import Any, Coroutine
+from typing import Any
 from dataclasses import dataclass
 from collections.abc import Awaitable, Callable
 
@@ -32,6 +31,7 @@ class DucoSwitchEntityDescription(SwitchEntityDescription):
     """Class describing HomeWizard switch entities."""
 
     action_state: str
+    exists_fn: Callable[[DeviceResponseEntry, int, str], bool] = lambda x, y, z: True
     available_fn: Callable[[DeviceResponseEntry, int, str], bool]
     is_on_fn: Callable[[DeviceResponseEntry], bool | None]
     set_fn: Callable[[DeviceResponseEntry, DucoClient, int, str, bool], Awaitable[None]]
@@ -43,7 +43,14 @@ SWITCHES = [
         name="Identify",
         action_state="SetIdentify",
         device_class=SwitchDeviceClass.SWITCH,
+        icon="mdi:crosshairs-question",
         entity_category=EntityCategory.CONFIG,
+        exists_fn=lambda x, nidx, node_action: nidx in x.node_actions
+        and any(
+            action.Action == node_action
+            for action in x.node_actions[nidx].Actions
+            if action.Action == node_action
+        ),
         available_fn=lambda x, nidx, node_action: nidx in x.node_actions
         and any(
             action.Action == node_action
@@ -66,16 +73,11 @@ async def async_setup_entry(
     LOGGER.debug(f"button:{inspect.currentframe().f_code.co_name}")
 
     """Set up the Identify button."""
-    calls_nodes: list[Coroutine[Any, Any, NodeDataDTO | None]] = []
-    for node_id in entry.runtime_data.duco_nidxs:
-        calls_nodes.append(entry.runtime_data.api.get_node_info(node_id))
-    node_results = await asyncio.gather(*calls_nodes)
-
     add_entities: list[DucoSwitchEntity] = [
         DucoSwitchEntity(entry.runtime_data, node, switch)
-        for node in node_results
-        if node is not None
+        for node in entry.runtime_data.data.nodes.values()
         for switch in SWITCHES
+        if switch.exists_fn(entry.runtime_data.data, node.Node, switch.action_state)
     ]
 
     async_add_entities(add_entities)

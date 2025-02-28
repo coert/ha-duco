@@ -1,13 +1,13 @@
-def remove_val_fields(data):
-    """Recursively remove 'Val' fields from the JSON-like dictionary."""
+def remove_fields(data, field="Val"):
+    """Recursively remove field from the JSON-like dictionary."""
 
     if isinstance(data, dict):
-        if "Val" in data and len(data) == 1:
-            return data["Val"]
-        return {key: remove_val_fields(value) for key, value in data.items()}
+        if field in data and len(data) == 1:
+            return data[field]
+        return {key: remove_fields(value, field) for key, value in data.items()}
 
     elif isinstance(data, list):
-        return [remove_val_fields(item) for item in data]
+        return [remove_fields(item, field) for item in data]
 
     return data
 

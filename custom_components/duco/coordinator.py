@@ -16,6 +16,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .api.DTO.InfoDTO import InfoDTO
 from .api.DTO.NodeInfoDTO import NodeDataDTO
 from .api.DTO.NodeActionDTO import NodeActionsDTO
+from .api.DTO.NodeConfigDTO import NodeConfigDTO
 from .api.private.duco_client import ApiError, DucoClient
 from .const import (
     DOMAIN,
@@ -89,8 +90,9 @@ class DucoDeviceUpdateCoordinator(DataUpdateCoordinator[DeviceResponseEntry]):
                         self.data.nodes[node.Node] = node
 
             calls: list[
-                Coroutine[Any, Any, NodeDataDTO | InfoDTO | NodeActionsDTO | None]
+                Coroutine[Any, Any, InfoDTO | NodeActionsDTO | NodeConfigDTO | None]
             ] = [self.api.get_node_supported_actions(idx) for idx in self.duco_nidxs]
+            calls.extend([self.api.get_node_config(idx) for idx in self.duco_nidxs])
             calls.append(self.api.get_info())
             api_results = await asyncio.gather(*calls)
 
@@ -99,6 +101,8 @@ class DucoDeviceUpdateCoordinator(DataUpdateCoordinator[DeviceResponseEntry]):
                     self.data.info = result
                 elif isinstance(result, NodeActionsDTO):
                     self.data.node_actions[result.Node] = result
+                elif isinstance(result, NodeConfigDTO):
+                    self.data.node_configs[result.Node] = result
 
         except ApiError as ex:
             LOGGER.error(f"Error creating connection to Duco API: {ex}")
@@ -120,25 +124,27 @@ class DucoDeviceUpdateCoordinator(DataUpdateCoordinator[DeviceResponseEntry]):
         try:
             loop_time = asyncio.get_event_loop().time()
             current_time = time.time()
+            time_stamp = self.api.api_timestamp
             LOGGER.debug(f"Loop started: {time.ctime(loop_time)} ({loop_time=})")
             LOGGER.debug(f"Current time: {time.ctime(current_time)} ({current_time=})")
-            LOGGER.debug(
-                f"API key valid until: {time.ctime(self.api.api_timestamp)} ({self.api.api_timestamp=})"
-            )
+            LOGGER.debug(f"Key valid until: {time.ctime(time_stamp)} ({time_stamp=})")
 
-            if current_time > self.api.api_timestamp:
+            if current_time > time_stamp:
                 await self.api.update_key()
 
-            calls: list[Coroutine[Any, Any, NodeDataDTO | None]] = [
+            calls: list[Coroutine[Any, Any, NodeDataDTO | InfoDTO | None]] = [
                 self.api.get_node_info(idx) for idx in self.duco_nidxs
             ]
+            calls.append(self.api.get_info())
             api_results = await asyncio.gather(*calls)
 
-            self.data.nodes = {
-                node_result.Node: node_result
-                for node_result in api_results
-                if node_result is not None
-            }
+            if api_results:
+                self.data.nodes.clear()
+            for result in api_results:
+                if isinstance(result, NodeDataDTO):
+                    self.data.nodes[result.Node] = result
+                elif isinstance(result, InfoDTO):
+                    self.data.info = result
 
         except ApiError as ex:
             LOGGER.error(f"Error fetching data from Duco API: {ex}")
