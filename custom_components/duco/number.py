@@ -184,7 +184,6 @@ NUMBERS = [
         key="uc_error_mode",
         name="UC error mode",
         entity_category=EntityCategory.CONFIG,
-        native_unit_of_measurement=UnitOfTime.MINUTES,
         exists_fn=lambda x, nidx, node_config: (
             nidx in x.node_configs
             and hasattr(x.node_configs[nidx], node_config)
