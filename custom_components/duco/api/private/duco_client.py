@@ -200,6 +200,8 @@ class DucoClient:
                 info = from_dict(InfoDTO, info_dict)  # type: ignore
                 self._info_general = info.General
 
+            assert self._info_general, "Info not found"
+
             return info
 
         except Exception as e:
