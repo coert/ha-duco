@@ -165,12 +165,11 @@ class DucoClient:
 
         if not self._info_general:
             await self.get_info()
-            assert self._info_general, "Info not found"
 
-        await self._create_api_key(self._info_general)
-
-        if self._rest_handler is not None:
-            self._rest_handler.headers.update({"Api-Key": self._api_key})
+        if self._info_general:
+            await self._create_api_key(self._info_general)
+            if self._rest_handler is not None:
+                self._rest_handler.headers.update({"Api-Key": self._api_key})
 
     async def get_api_info(self) -> ApiDetailsDTO | None:
         LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")

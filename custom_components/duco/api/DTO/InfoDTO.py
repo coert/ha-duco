@@ -106,7 +106,7 @@ class CalibrationDTO:
 class VentilationDTO:
     Sensor: SensorDTO
     Fan: Optional[FanDTO]
-    Calibration: CalibrationDTO
+    Calibration: Optional[CalibrationDTO]
 
 
 @dataclass
