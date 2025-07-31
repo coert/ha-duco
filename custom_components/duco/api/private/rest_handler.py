@@ -36,11 +36,25 @@ class RestHandler:
         ssl_context: ssl.SSLContext | None = None,
         connector: TCPConnector | None = None,
     ):
-        self._base_url = base_url
+        self._base_url = base_url  # https://192.168.5.4
         self._headers = headers
         self._ssl_context = ssl_context
         self._connector = connector
         self._client_session = ClientSession()
+
+        scheme, host, port, path, query, fragment = urlparse(
+            base_url
+        )  # Validate the base URL format
+
+        self._plain_url = f"http://{host}"
+        self._base_url = f"{scheme}://{host}"
+        if port:
+            self._plain_url += f":{port}"
+            self._base_url += f":{port}"
+
+        if path:
+            self._plain_url += path
+            self._base_url += path
 
         self.headers.update({"Content-Type": "application/json"})
 
@@ -89,6 +103,17 @@ class RestHandler:
         )
 
         response_data = await self.get_with_retries(f"{self._base_url}{endpoint}")
+        if response_data:
+            return response_data
+
+        return {}
+
+    async def get_plain(self, endpoint: str) -> dict[str, Any]:
+        LOGGER.debug(
+            f"{inspect.currentframe().f_code.co_name}  {self._plain_url}{endpoint}"
+        )
+
+        response_data = await self.get_with_retries(f"{self._plain_url}{endpoint}")
         if response_data:
             return response_data
 

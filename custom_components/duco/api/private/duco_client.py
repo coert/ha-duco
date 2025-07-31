@@ -190,7 +190,16 @@ class DucoClient:
             info_val_dict = await self.rest_handler.get("/info")
             info_dict = remove_fields(info_val_dict)
             info = from_dict(InfoDTO, info_dict)  # type: ignore
-            self._info_general = info.General
+
+            if info:
+                self._info_general = info.General
+
+            else:
+                info_val_dict = await self.rest_handler.get_plain("/info")
+                info_dict = remove_fields(info_val_dict)
+                info = from_dict(InfoDTO, info_dict)  # type: ignore
+                self._info_general = info.General
+
             return info
 
         except Exception as e:
