@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 
 @dataclass
@@ -62,7 +62,7 @@ class SubSystemDTO:
 
 @dataclass
 class DiagDTO:
-    Errors: Optional[list[str]]
+    Errors: Optional[list[dict[str, Any]]]
     SubSystems: Optional[list[SubSystemDTO]]
 
 

@@ -9,6 +9,8 @@ from urllib.parse import urlparse
 from dacite import from_dict
 from dataclasses import asdict
 
+import orjson
+
 from ...api.DTO.ApiDTO import ApiDetailsDTO
 from ...api.DTO.InfoDTO import GeneralDTO, InfoDTO
 from ...api.DTO.NodeInfoDTO import NodeDataDTO, NodesDataDTO
@@ -188,6 +190,8 @@ class DucoClient:
         try:
             info_val_dict = await self.rest_handler.get("/info")
             info_dict = remove_fields(info_val_dict)
+            LOGGER.debug(orjson.dumps(info_dict, option=orjson.OPT_INDENT_2).decode())
+
             info = from_dict(InfoDTO, info_dict)  # type: ignore
 
             if info:
