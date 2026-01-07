@@ -47,12 +47,6 @@ class DucoClient:
         parsed_url = urlparse(host)
         self._scheme = parsed_url.scheme
         self._netloc = parsed_url.netloc
-
-        # self._headers = {
-        #     "Accept-Encoding": "gzip, deflate",
-        #     "Accept": "*/*",
-        #     "Connection": "keep-alive",
-        # }
         self._headers = {}
         self._info_general = None
         self._rest_handler = None
@@ -127,6 +121,7 @@ class DucoClient:
         LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
 
         if self._rest_handler:
+            await self._rest_handler.close()
             self._rest_handler = None
 
     def get_pem_filepath(self):
@@ -177,7 +172,10 @@ class DucoClient:
         LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
 
         try:
-            api_info_val_dict = await self.rest_handler.get("/api")
+            api_info_val_dict = {}
+            async with self.rest_handler as rh:
+                api_info_val_dict = await rh.get("/api")
+
             api_info_dict = remove_fields(api_info_val_dict)
             return from_dict(ApiDetailsDTO, api_info_dict)  # type: ignore
 
@@ -188,22 +186,28 @@ class DucoClient:
     async def get_info(self) -> InfoDTO | None:
         LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
         try:
-            info_val_dict = await self.rest_handler.get("/info")
-            info_dict = remove_fields(info_val_dict)
-            LOGGER.debug(orjson.dumps(info_dict, option=orjson.OPT_INDENT_2).decode())
+            info = None
 
-            info = from_dict(InfoDTO, info_dict)  # type: ignore
-
-            if info:
-                self._info_general = info.General
-
-            else:
-                info_val_dict = await self.rest_handler.get_plain("/info")
+            async with self.rest_handler as rh:
+                info_val_dict = await rh.get("/info")
                 info_dict = remove_fields(info_val_dict)
-                info = from_dict(InfoDTO, info_dict)  # type: ignore
-                self._info_general = info.General
 
-            assert self._info_general, "Info not found"
+                LOGGER.debug(
+                    orjson.dumps(info_dict, option=orjson.OPT_INDENT_2).decode()
+                )
+
+                info = from_dict(InfoDTO, info_dict)  # type: ignore
+                if info:
+                    self._info_general = info.General
+
+                else:
+                    info_val_dict = {}
+                    info_val_dict = await rh.get_plain("/info")
+                    info_dict = remove_fields(info_val_dict)
+                    info = from_dict(InfoDTO, info_dict)  # type: ignore
+                    self._info_general = info.General
+
+                assert self._info_general, "Info not found"
 
             return info
 
@@ -214,12 +218,16 @@ class DucoClient:
     async def get_nodes(self) -> NodesDataDTO | None:
         LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
         try:
-            nodes_val_dict = await self.rest_handler.get("/info/nodes")
-            nodes = [
-                from_dict(NodeDataDTO, remove_fields(node_dict))  # type: ignore
-                for node_dict in nodes_val_dict["Nodes"]
-            ]
-            return NodesDataDTO(**{"Nodes": nodes})  # type: ignore
+            nodes_data = None
+            async with self.rest_handler as rh:
+                nodes_val_dict = await rh.get("/info/nodes")
+                nodes = [
+                    from_dict(NodeDataDTO, remove_fields(node_dict))  # type: ignore
+                    for node_dict in nodes_val_dict["Nodes"]
+                ]
+                nodes_data = NodesDataDTO(**{"Nodes": nodes})  # type: ignore
+
+            return nodes_data
 
         except Exception as e:
             LOGGER.error(f"Error while getting nodes: {e}")
@@ -229,9 +237,10 @@ class DucoClient:
         LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
 
         try:
-            node_info_val_dict = await self.rest_handler.get(f"/info/nodes/{node_id}")
-            node_info_dict = remove_fields(node_info_val_dict)
-            return from_dict(NodeDataDTO, node_info_dict)  # type: ignore
+            async with self.rest_handler as rh:
+                node_info_val_dict = await rh.get(f"/info/nodes/{node_id}")
+                node_info_dict = remove_fields(node_info_val_dict)
+                return from_dict(NodeDataDTO, node_info_dict)  # type: ignore
 
         except Exception as e:
             LOGGER.error(f"Error while getting nodes: {e}")
@@ -241,8 +250,9 @@ class DucoClient:
         LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
 
         try:
-            supported_actions = await self.rest_handler.get(f"/action/nodes/{node_id}")
-            return from_dict(NodeActionsDTO, supported_actions)  # type: ignore
+            async with self.rest_handler as rh:
+                supported_actions = await rh.get(f"/action/nodes/{node_id}")
+                return from_dict(NodeActionsDTO, supported_actions)  # type: ignore
 
         except Exception as e:
             LOGGER.error(f"Error while getting supported actions: {e}")
@@ -253,7 +263,8 @@ class DucoClient:
 
         try:
             actions = asdict(NodeActionTriggerDTO(Action=action))
-            await self.rest_handler.post(f"/action/nodes/{node_id}", actions)
+            async with self.rest_handler as rh:
+                await rh.post(f"/action/nodes/{node_id}", actions)
             LOGGER.debug(f"Triggered action {action} for node {node_id}")
 
         except Exception as e:
@@ -264,7 +275,8 @@ class DucoClient:
         try:
             actions = asdict(NodeActionSetDTO(Action=action, Val=state))
             LOGGER.debug(f"Set action {action} to {state} for node {node_id}")
-            await self.rest_handler.post(f"/action/nodes/{node_id}", actions)
+            async with self.rest_handler as rh:
+                await rh.post(f"/action/nodes/{node_id}", actions)
 
         except Exception as e:
             LOGGER.error(f"Error while setting action: {e}")
@@ -273,9 +285,10 @@ class DucoClient:
         LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
 
         try:
-            node_config_dict = await self.rest_handler.get(f"/config/nodes/{node_id}")
-            node_config_dict = remove_fields(node_config_dict)
-            return from_dict(NodeConfigDTO, node_config_dict)  # type: ignore
+            async with self.rest_handler as rh:
+                node_config_dict = await rh.get(f"/config/nodes/{node_id}")
+                node_config_dict = remove_fields(node_config_dict)
+                return from_dict(NodeConfigDTO, node_config_dict)  # type: ignore
 
         except Exception as e:
             LOGGER.error(f"Error while getting node config: {e}")
@@ -289,7 +302,19 @@ class DucoClient:
         try:
             node_config_dict = {node_config: {"Val": value}}
             LOGGER.debug(f"Set config {node_config} to {value} for node {node_id}")
-            await self.rest_handler.patch(f"/config/nodes/{node_id}", node_config_dict)
+            async with self.rest_handler as rh:
+                await rh.patch(f"/config/nodes/{node_id}", node_config_dict)
 
         except Exception as e:
             LOGGER.error(f"Error while setting action: {e}")
+
+    async def supports_update_ventilation_action(self, node_id: int) -> bool:
+        LOGGER.debug(f"{inspect.currentframe().f_code.co_name}")
+
+        supported_actions = await self.get_node_supported_actions(node_id)
+        if supported_actions:
+            for action in supported_actions.Actions:
+                if action.Action == "SetVentilationState":
+                    return True
+
+        return False

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from functools import cached_property
 import inspect
 from dataclasses import dataclass
 from collections.abc import Awaitable, Callable
+from typing import cast
 
 from homeassistant.components.button import (
     ButtonDeviceClass,
@@ -165,11 +167,8 @@ class DucoVentActionButtonEntity(DucoEntity, ButtonEntity):
 
         self._node_id = node.Node
         self._action_state = description.action_state
-        self._attr_unique_id = (
-            f"{coordinator.config_entry.unique_id}_{self._node_id}_{description.key}"
-        )
-        self.entity_id = f"button.{node.General.Type}_{description.key}"
-
+        self._attr_unique_id = f"{coordinator.config_entry.unique_id}_{self._node_id}_{description.key.lower()}"
+        self.entity_id = f"button.{node.General.Type.lower()}_{description.key.lower()}"
         self.entity_description = description
 
     @property

@@ -38,7 +38,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DucoConfigEntry) -> bool
             hass.config_entries.flow.async_abort(progress_flow["flow_id"])
 
     # Finalize
-    entry.async_on_unload(coordinator.api.rest_handler.close)
+    entry.async_on_unload(coordinator.api.disconnect)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True

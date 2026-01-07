@@ -294,7 +294,7 @@ class DucoNumberEntity(DucoEntity, NumberEntity):
         self._attr_unique_id = (
             f"{coordinator.config_entry.unique_id}_{self._node_id}_{description.key}"
         )
-        self.entity_id = f"number.{node.General.Type}_{description.key}"
+        self.entity_id = f"number.{node.General.Type.lower()}_{description.key.lower()}"
         self.entity_description = description
 
         self._attr_mode = NumberMode.SLIDER

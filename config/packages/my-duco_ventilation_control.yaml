@@ -1,0 +1,136 @@
+#################################################################
+#                HIGHEST CO₂ COMBINED SENSOR                    #
+#################################################################
+
+template:
+  - sensor:
+      - name: "Highest CO₂ (All Rooms)"
+        unique_id: highest_co2_all_rooms
+        unit_of_measurement: "ppm"
+        state: >
+          {% set values = [
+            states('sensor.duco_ucco2_co2')|int(0),
+            states('sensor.air_quality_monitor_babykamer_carbon_dioxide')|int(0),
+            states('sensor.air_quality_monitor_slaapkamer_carbon_dioxide')|int(0),
+            states('sensor.air_quality_monitor_werkkamer_carbon_dioxide')|int(0)
+          ] %}
+          {{ values | max }}
+
+#################################################################
+#             HYSTERESIS-BASED VENTILATION LEVEL                #
+#################################################################
+
+  - sensor:
+      - name: "Ventilation Demand Level"
+        unique_id: ventilation_demand_level
+        icon: mdi:fan-auto
+        state: >
+          {% set co2 = states('sensor.highest_co2_all_rooms')|int(0) %}
+          {% set sp = states('number.ucco2_co2_set_point')|int(800) %}
+          {% set prev = states('sensor.ventilation_demand_level')|int(0) %}
+
+          {% if prev == 0 %}
+            {% if co2 > sp %}1{% else %}0{% endif %}
+
+          {% elif prev == 1 %}
+            {% if co2 > sp + 200 %}2
+            {% elif co2 < sp - 100 %}0
+            {% else %}1{% endif %}
+
+          {% elif prev == 2 %}
+            {% if co2 > sp + 400 %}3
+            {% elif co2 < sp + 100 %}1
+            {% else %}2{% endif %}
+
+          {% elif prev == 3 %}
+            {% if co2 < sp + 250 %}2
+            {% else %}3{% endif %}
+
+          {% else %}
+            0
+          {% endif %}
+
+#################################################################
+#         AUTOMATION TO PRESS THE DUCO BUTTONS FOR FAN          #
+#################################################################
+
+automation:
+  - alias: "DUCO CO₂ Ventilation Control"
+    id: duco_co2_ventilation_control
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: sensor.ventilation_demand_level
+
+    action:
+      - choose:
+
+          - conditions: "{{ trigger.to_state.state == 0 }}"
+            sequence:
+              - service: button.press
+                target:
+                  entity_id: button.ucco2_fan_state_auto
+
+          - conditions: "{{ trigger.to_state.state == 1 }}"
+            sequence:
+              - service: button.press
+                target:
+                  entity_id: button.ucco2_fan_state_man1
+
+          - conditions: "{{ trigger.to_state.state == 2 }}"
+            sequence:
+              - service: button.press
+                target:
+                  entity_id: button.ucco2_fan_state_man2
+
+          - conditions: "{{ trigger.to_state.state == 3 }}"
+            sequence:
+              - service: button.press
+                target:
+                  entity_id: button.ucco2_fan_state_man3
+
+  - alias: "DUCO Ventilation Enforcement (Smart)"
+    id: duco_ventilation_enforcement_smart
+    mode: single
+    trigger:
+      - platform: time_pattern
+        minutes: "/1"
+
+    action:
+      - variables:
+
+          # The hysteresis output (0–3)
+          level: "{{ states('sensor.ventilation_demand_level') }}"
+
+          # DUCO's actual mode (AUTO / MAN1 / MAN2 / MAN3)
+          duco: "{{ states('sensor.duco_ucco2_ventilation_state') }}"
+
+      - choose:
+
+          # === Level 0 → AUTO ===
+          - conditions: "{{ level == 0 and duco != 'AUTO' }}"
+            sequence:
+              - service: button.press
+                target:
+                  entity_id: button.ucco2_fan_state_auto
+
+          # === Level 1 → MAN1 ===
+          - conditions: "{{ level == 1 and duco != 'MAN1' }}"
+            sequence:
+              - service: button.press
+                target:
+                  entity_id: button.ucco2_fan_state_man1
+
+          # === Level 2 → MAN2 ===
+          - conditions: "{{ level == 2 and duco != 'MAN2' }}"
+            sequence:
+              - service: button.press
+                target:
+                  entity_id: button.ucco2_fan_state_man2
+
+          # === Level 3 → MAN3 ===
+          - conditions: "{{ level == 3 and duco != 'MAN3' }}"
+            sequence:
+              - service: button.press
+                target:
+                  entity_id: button.ucco2_fan_state_man3

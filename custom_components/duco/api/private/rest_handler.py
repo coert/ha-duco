@@ -58,13 +58,11 @@ class RestHandler:
 
         self.headers.update({"Content-Type": "application/json"})
 
-    def __del__(self):
-        try:
-            asyncio.create_task(self.close())
+    async def __aenter__(self):
+        return self
 
-        except Exception as e:
-            LOGGER.warning(f"Error while closing session: {e}")
-            asyncio.new_event_loop().run_until_complete(self.close())
+    async def __aexit__(self, exc_type, exc, tb):
+        return
 
     @property
     def max_retries(self) -> int:
@@ -98,6 +96,7 @@ class RestHandler:
             LOGGER.error(f"Error while closing session: {e}")
 
     async def get(self, endpoint: str) -> dict[str, Any]:
+        LOGGER.debug(f"{endpoint=}")
         LOGGER.debug(
             f"{inspect.currentframe().f_code.co_name}  {self._base_url}{endpoint}"
         )
@@ -251,6 +250,7 @@ class RestHandler:
         retries = 0
         while retries < self.max_retries:
             try:
+                LOGGER.debug(f"Posting to {url} with data: {data_str}")
                 async with self._client_session.post(
                     url,
                     headers=self.headers,

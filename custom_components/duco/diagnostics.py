@@ -28,7 +28,7 @@ async def async_get_config_entry_diagnostics(
         "entry": async_redact_data(entry.data, TO_REDACT),
         "data": {
             "info": asdict(data.info) if data.info else None,
-            "nodes": [asdict(node) for node in data.nodes],
+            "nodes": [asdict(node) for node in data.nodes.values()],
         },
     }
     return async_redact_data(redact_data, TO_REDACT)
