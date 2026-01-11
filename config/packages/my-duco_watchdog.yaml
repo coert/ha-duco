@@ -4,8 +4,11 @@
 # Watchdog:
 # - check elke 60s: GET http://192.168.5.4/info  (HTTP)
 # - check elke 60s: GET https://192.168.5.4/info (HTTPS, verify_ssl: false)
-# - als HTTPS 3 min down terwijl HTTP nog OK => power cycle via switch.duco_socket (30s)
-# - cooldown: minimaal 15 min tussen reboots
+# - als HTTPS N min down terwijl HTTP nog OK => eerst integration reload
+# - als nog steeds down => power cycle via switch.duco_socket (30s)
+# - cooldowns:
+#     - minimaal X min tussen integration reloads
+#     - minimaal Y min tussen reboots
 ###############################################################################
 
 homeassistant:
@@ -26,8 +29,17 @@ input_number:
     icon: mdi:timer-alert
     initial: 3
 
+  duco_watchdog_reload_cooldown_minutes:
+    name: Duco watchdog reload cooldown minutes
+    min: 1
+    max: 60
+    step: 1
+    unit_of_measurement: min
+    icon: mdi:timer-refresh
+    initial: 5
+
   duco_watchdog_cooldown_minutes:
-    name: Duco watchdog cooldown minutes
+    name: Duco watchdog reboot cooldown minutes
     min: 5
     max: 180
     step: 5
@@ -40,9 +52,18 @@ counter:
     name: Duco reboot count
     icon: mdi:counter
 
+  duco_reload_count:
+    name: Duco integration reload count
+    icon: mdi:counter
+
 input_datetime:
   duco_last_reboot:
     name: Duco last reboot
+    has_date: true
+    has_time: true
+
+  duco_last_reload:
+    name: Duco last integration reload
     has_date: true
     has_time: true
 
@@ -115,8 +136,8 @@ automation:
         target:
           entity_id: input_boolean.duco_watchdog_enabled
 
-  - alias: "Duco watchdog: reboot when HTTPS down (HTTP still OK)"
-    id: duco_watchdog_reboot_when_https_down
+  - alias: "Duco watchdog: reload integration / reboot when HTTPS down (HTTP still OK)"
+    id: duco_watchdog_reload_then_reboot_when_https_down
     mode: single
 
     trigger:
@@ -149,36 +170,103 @@ automation:
       - condition: template
         value_template: "{{ is_state('sensor.duco_http_heartbeat','ok') }}"
 
-      # Anti-loop: cooldown_minutes between reboots
+    action:
+      # -----------------------------
+      # Step 1: Try integration reload
+      # -----------------------------
+      - variables:
+          fail_minutes: "{{ states('input_number.duco_watchdog_fail_minutes') | int(3) }}"
+          reload_cooldown_s: "{{ (states('input_number.duco_watchdog_reload_cooldown_minutes') | int(5)) * 60 }}"
+          reboot_cooldown_s: "{{ (states('input_number.duco_watchdog_cooldown_minutes') | int(15)) * 60 }}"
+          now_ts: "{{ as_timestamp(now()) }}"
+          last_reload: "{{ states('input_datetime.duco_last_reload') }}"
+          last_reboot: "{{ states('input_datetime.duco_last_reboot') }}"
+          last_reload_ts: >
+            {% if last_reload in ['unknown','unavailable','none',''] %}
+              0
+            {% else %}
+              {{ as_timestamp(strptime(last_reload, '%Y-%m-%d %H:%M:%S')) }}
+            {% endif %}
+          last_reboot_ts: >
+            {% if last_reboot in ['unknown','unavailable','none',''] %}
+              0
+            {% else %}
+              {{ as_timestamp(strptime(last_reboot, '%Y-%m-%d %H:%M:%S')) }}
+            {% endif %}
+          can_reload: "{{ (now_ts - last_reload_ts) > reload_cooldown_s }}"
+          can_reboot: "{{ (now_ts - last_reboot_ts) > reboot_cooldown_s }}"
+
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ can_reload }}"
+            sequence:
+              - service: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.duco_last_reload
+                data:
+                  datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+
+              - service: counter.increment
+                target:
+                  entity_id: counter.duco_reload_count
+
+              - service: logbook.log
+                data:
+                  name: "Duco watchdog"
+                  message: "HTTPS down (HTTP OK) → reloading Duco integration config entry."
+                  entity_id: sensor.duco_box_ventilation_state
+
+              - service: homeassistant.reload_config_entry
+                target:
+                  entity_id: sensor.duco_box_ventilation_state
+
+              # Give the integration time to reconnect; REST sensors update every 60s
+              - delay: "00:02:00"
+
+      # Re-check after reload attempt (or immediately if reload cooldown blocked it)
       - condition: template
         value_template: >
-          {% set cooldown = (states('input_number.duco_watchdog_cooldown_minutes') | int(15)) * 60 %}
-          {% set last = states('input_datetime.duco_last_reboot') %}
-          {% if last in ['unknown','unavailable','none',''] %}
-            true
-          {% else %}
-            {% set last_ts = as_timestamp(strptime(last, '%Y-%m-%d %H:%M:%S')) %}
-            {{ (as_timestamp(now()) - last_ts) > cooldown }}
-          {% endif %}
+          {{ is_state('sensor.duco_http_heartbeat','ok') and not is_state('binary_sensor.duco_https_up','on') }}
 
-    action:
-      - service: input_datetime.set_datetime
-        target:
-          entity_id: input_datetime.duco_last_reboot
-        data:
-          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+      # --------------------------------
+      # Step 2: If still bad -> powercycle
+      # --------------------------------
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ can_reboot }}"
+            sequence:
+              - service: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.duco_last_reboot
+                data:
+                  datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
 
-      - service: counter.increment
-        target:
-          entity_id: counter.duco_reboot_count
+              - service: counter.increment
+                target:
+                  entity_id: counter.duco_reboot_count
 
-      # Power cycle via smart plug
-      - service: switch.turn_off
-        target:
-          entity_id: switch.duco_socket
+              - service: logbook.log
+                data:
+                  name: "Duco watchdog"
+                  message: "HTTPS still down after reload (HTTP OK) → power-cycling Duco smart plug (30s)."
+                  entity_id: switch.duco_socket
 
-      - delay: "00:00:30"
+              - service: switch.turn_off
+                target:
+                  entity_id: switch.duco_socket
 
-      - service: switch.turn_on
-        target:
-          entity_id: switch.duco_socket
+              - delay: "00:00:30"
+
+              - service: switch.turn_on
+                target:
+                  entity_id: switch.duco_socket
+
+          # else: reboot cooldown active -> only log it
+        default:
+          - service: logbook.log
+            data:
+              name: "Duco watchdog"
+              message: "HTTPS still down but reboot cooldown active → skipping power-cycle."
+              entity_id: switch.duco_socket
